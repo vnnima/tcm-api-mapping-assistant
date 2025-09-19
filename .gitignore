@@ -132,12 +132,6 @@ ENV/
 env.bak/
 venv.bak/
 
-# VS Code - exclude personal settings but keep project settings
-.vscode/launch.json
-.vscode/tasks.json
-.vscode/extensions.json
-.vscode/*.code-workspace
-
 # Spyder project settings
 .spyderproject
 .spyproject
