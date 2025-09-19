@@ -3,7 +3,7 @@ from pathlib import Path
 
 class Config:
     # TODO: When deploying use gpt-5
-    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
     OPENAI_EMBEDDINGS_MODEL = os.getenv(
         "OPENAI_EMBEDDINGS_MODEL", "text-embedding-3-small")
     INDEX_DIR = Path(os.getenv("VECTORSTORE_PATH", "./vectorstore_min"))
