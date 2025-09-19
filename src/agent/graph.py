@@ -1,12 +1,14 @@
 from __future__ import annotations
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
-from typing import Dict, List, Any, TypedDict
+from langgraph.graph.message import add_messages
+from typing import Dict, List, Any, TypedDict, Annotated, Sequence
 
 from agent.rag import rag_search
 from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
-                         parse_wsm_user, parse_yes_no, no_endpoint_information)
+                         parse_wsm_user, parse_yes_no, has_endpoint_information,
+                         get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
 from agent.config import Config
 
 
@@ -14,52 +16,62 @@ llm = ChatOpenAI(model=Config.OPENAI_MODEL, temperature=0)
 
 
 class State(TypedDict):
-    # TODO: Maybe add this Annotated[XY, add] thing. Look at docs
-    messages: List[Dict[str, Any]]
+    messages: Annotated[Sequence[BaseMessage], add_messages]
     provisioning: Dict[str, Any]
     started: bool
     completed: bool
     rag_snippets: List[str]
-    user_input: str
 
 
-def intro_node(state: State) -> State:
-    existing_messages = state.get("messages", [])
-
-    state.setdefault("messages", [])
-    state.setdefault("provisioning", {})
-
+def intro_node(state: State) -> dict:
     if state.get("completed", False):
-        return state
-    if state.get("started", False):
-        return state
-    # If there are already messages in the conversation, don't show intro again
-    if len(existing_messages) > 0:
-        return state
+        return {}
 
-    state["messages"].append({
-        "role": "assistant",
-        "meta": "intro",
-        "content": (
-            "Hallo! Ich bin dein **AEB API Mapping Assistant**. "
-            "Ich helfe dir dabei, die **TCM Screening API** sauber in dein System zu integrieren.\n\n"
-            "Möchtest du mit der Integration beginnen? (Ja/Nein)"
-        )
-    })
-    return state
-
-
-def clarify_node(state: State) -> State:
-    """Generic clarify node that looks at the last question and user's response to provide help."""
-    user_input = state.get("user_input", "")
     messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
 
-    # Find the last assistant message (the question)
-    last_question = "eine Frage"  # fallback
-    for msg in reversed(messages):
-        if msg.get("role") == "assistant":
-            last_question = msg.get("content", "")
-            break
+    if not user_input:
+        return {
+            "messages": [
+                AIMessage(content=(
+                    "Hallo! Ich bin dein **AEB API Mapping Assistant**. "
+                    "Ich helfe dir dabei, die **TCM Screening API** sauber in dein System zu integrieren.\n\n"
+                    "Möchtest du mit der Integration beginnen? (Ja/Nein)"
+                ))
+            ]
+        }
+
+    yn = parse_yes_no(user_input)
+    if yn is False:
+        return {
+            "completed": True,
+            "messages": [
+                AIMessage(content=(
+                    "Alles klar! Wenn du später Hilfe bei der TCM Screening API Integration benötigst, stehe ich gerne zur Verfügung. "
+                    "Viel Erfolg!"
+                ))
+            ]
+        }
+    else:
+        return {
+            "started": True,
+            "messages": [
+                AIMessage(content=(
+                    "Super! Dann lass uns mit der Integration der TCM Screening API beginnen. "
+                    "Zuerst benötige ich einige Informationen von dir."
+                ))
+            ]
+        }
+
+
+def clarify_node(state: State) -> dict:
+    """Generic clarify node that looks at the last question and user's response to provide help."""
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+
+    last_question = get_last_assistant_message(messages)
+    if not last_question:
+        last_question = "eine Frage"
 
     sys = SystemMessage(content=(
         "Du bist ein hilfsbereiter Assistant. Der Benutzer hat eine Frage nicht richtig beantwortet. "
@@ -82,171 +94,172 @@ Bleibe kurz, hilfreich und freundlich.
 """)
 
     resp = llm.invoke([sys, human])
-    state["messages"].append({"role": "assistant", "content": resp.content})
-
-    # Clear user_input so we wait for new input
-    state["user_input"] = ""
-
-    return state
+    return {"messages": [resp]}
 
 
-def ask_endpoints_node(state: State) -> State:
-    state["started"] = True
+def ask_endpoints_node(state: State) -> dict:
+    messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
 
-    prov = state.setdefault("provisioning", {})
-    user_input = state.get("user_input") or ""
+    if not user_input:
+        return {
+            "messages": [
+                AIMessage(content=(
+                    "Bitte zuerst die **AEB RZ Endpoints** angeben (mindestens eine URL). "
+                    "Diese sind für die API-Integration erforderlich.\n"
+                    f"Hinweis: {Config.ENDPOINTS_HELP_URL}\n\n"
+                    "Format:\n"
+                    "Test: https://...\n"
+                    "Prod:  https://..."
+                ))
+            ]
+        }
 
-    # TODO: Look at this. This seems fishy. Do we need this?
-    # IMPORTANT: If we're coming from intro with a yes/no answer, clear it
-    # because that input was for the intro question, not the endpoints question
-    if not state.get("provisioning", {}).get("test_endpoint") and not state.get("provisioning", {}).get("prod_endpoint"):
-        # Check if the input looks like a yes/no answer rather than endpoint attempt
-        yn_result = parse_yes_no(user_input)
-        if yn_result is not None:
-            user_input = ""
-            state["user_input"] = ""
-
+    prov = state.get("provisioning", {})
     found = parse_endpoints(user_input)
 
-    # TODO: The URL extration logic ca be improved
     # If exactly one URL and no prior endpoints, accept as test by default
     single = URL_RE.findall(user_input)
-    if single and len(single) == 1 and not found and no_endpoint_information(prov):
+    if single and len(single) == 1 and not found and not has_endpoint_information(prov):
         found = {"test_endpoint": single[0]}
+
+    # If user provided input but parsing failed, route to clarify
+    if not has_endpoint_information(prov) and not found:
+        if user_input.strip():
+            return {}
+
+        # First time asking - show initial request
+        return {
+            "started": True,
+            "messages": [
+                AIMessage(content=(
+                    "Bitte zuerst die **AEB RZ Endpoints** angeben (mindestens eine URL). "
+                    "Diese sind für die API-Integration erforderlich.\n"
+                    f"Hinweis: {Config.ENDPOINTS_HELP_URL}\n\n"
+                    "Format:\n"
+                    "Test: https://...\n"
+                    "Prod:  https://..."
+                ))
+            ]
+        }
 
     prov.update(found)
 
-    # If user provided input but parsing failed, route to clarify
-    if no_endpoint_information(prov):
-        if user_input.strip():
-            state["user_input"] = user_input
-            return state
+    lines = format_endpoints_message(found)
 
-        new_message = {
-            "role": "assistant",
-            "content": (
-                "Bitte zuerst die **AEB RZ Endpoints** angeben (mindestens eine URL). "
-                "Diese sind für die API-Integration erforderlich.\n"
-                f"Hinweis: {Config.ENDPOINTS_HELP_URL}\n\n"
-                "Format:\n"
-                "Test: https://...\n"
-                "Prod:  https://..."
-            )
-        }
-        state["messages"].append(new_message)
-        state["user_input"] = ""
-        return state
-
-    # If we get here, we have at least one endpoint
-    lines = []
-    if prov.get("test_endpoint"):
-        lines.append(f"- Test: {prov['test_endpoint']}")
-    if prov.get("prod_endpoint"):
-        lines.append(f"- Prod:  {prov['prod_endpoint']}")
-    if len(lines) == 1:
-        # TODO: There is acutally no way to add the second endpoint later. Maybe remove this entirely
-        lines.append(
-            "Hinweis: Den zweiten Endpoint (Test/Prod) können Sie später ergänzen.")
-
-    confirmation_message = {
-        "role": "assistant",
-        "content": "Danke! Endpoints erfasst:\n" + "\n".join(lines)
+    return {
+        "started": True,
+        "provisioning": prov,
+        "messages": [
+            AIMessage(content="Danke! Endpoints erfasst:\n" + "\n".join(lines))
+        ]
     }
-    state["messages"].append(confirmation_message)
-
-    state["user_input"] = ""
-    return state
 
 
-def ask_client_node(state: State) -> State:
-    prov = state.setdefault("provisioning", {})
-    user_input = state.get("user_input") or ""
+def ask_client_node(state: State) -> dict:
+    messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
+    prov = state.get("provisioning", {})
 
-    # Check if we just came from clarify_endpoints and need to show confirmation
-    # We can detect this by checking if we have endpoints but no confirmation message yet
-    if (prov.get("test_endpoint") or prov.get("prod_endpoint")):
-        # Check if we already showed endpoints confirmation by looking at recent messages
-        recent_messages = state.get(
-            "messages", [])[-3:]  # Check last 3 messages
-        has_endpoints_confirmation = any("Danke! Endpoints erfasst" in msg.get("content", "")
-                                         for msg in recent_messages)
+    confirmation_msgs = []
 
-        if not has_endpoints_confirmation:
-            # Show endpoints confirmation
-            lines = []
-            if prov.get("test_endpoint"):
-                lines.append(f"- Test: {prov['test_endpoint']}")
-            if prov.get("prod_endpoint"):
-                lines.append(f"- Prod:  {prov['prod_endpoint']}")
+    if not user_input:
+        return {
+            "messages": confirmation_msgs + [
+                AIMessage(content=(
+                    "2) **Mandantenname (clientIdentCode)**:\n"
+                    "- Für jeden Kunden steht ein eigener Mandant zur Verfügung.\n"
+                    "Bitte teilen Sie Ihren **clientIdentCode** mit (z. B. ACME01).\n\n"
+                    "Format: `clientIdentCode=ACME01` oder `Mandant: ACME01`"
+                ))
+            ]
+        }
 
-            confirmation_message = {
-                "role": "assistant",
-                "content": "Danke! Endpoints erfasst:\n" + "\n".join(lines)
-            }
-            state["messages"].append(confirmation_message)
+    # # Check if we just came from clarify_endpoints and need to show confirmation
+    # # We can detect this by checking if we have endpoints but no confirmation message yet
+    # if has_endpoint_information(prov):
+    #     # Check if we already showed endpoints confirmation by looking at recent messages
+    #     recent_messages = messages[-3:] if len(messages) >= 3 else messages
+    #     has_endpoints_confirmation = any("Danke! Endpoints erfasst" in get_message_content(msg)
+    #                                      for msg in recent_messages if isinstance(msg, AIMessage))
+
+    #     if not has_endpoints_confirmation:
+    #         # Show endpoints confirmation
+    #         lines = []
+    #         if prov.get("test_endpoint"):
+    #             lines.append(f"- Test: {prov['test_endpoint']}")
+    #         if prov.get("prod_endpoint"):
+    #             lines.append(f"- Prod:  {prov['prod_endpoint']}")
+
+    #         confirmation_msgs.append(
+    #             AIMessage(content="Danke! Endpoints erfasst:\n" +
+    #                       "\n".join(lines))
+    #         )
+
+    if user_input:
+        prov = {**prov, "clientIdentCode": parse_client_ident(user_input)}
 
     if not prov.get("clientIdentCode"):
-        guess = parse_client_ident(user_input)
-        if guess:
-            prov["clientIdentCode"] = guess
+        return {
+            "provisioning": prov,
+            "messages": confirmation_msgs + [
+                AIMessage(content=(
+                    "2) **Mandantenname (clientIdentCode)**:\n"
+                    "- Für jeden Kunden steht ein eigener Mandant zur Verfügung.\n"
+                    "Bitte teilen Sie Ihren **clientIdentCode** mit (z. B. ACME01).\n\n"
+                    "Format: `clientIdentCode=ACME01` oder `Mandant: ACME01`"
+                ))
+            ]
+        }
 
-    if not prov.get("clientIdentCode"):
-        state["messages"].append({
-            "role": "assistant",
-            "content": (
-                "2) **Mandantenname (clientIdentCode)**:\n"
-                "- Für jeden Kunden steht ein eigener Mandant zur Verfügung.\n"
-                "Bitte teilen Sie Ihren **clientIdentCode** mit (z. B. ACME01).\n\n"
-                "Format: `clientIdentCode=ACME01` oder `Mandant: ACME01`"
-            )
-        })
-        # Clear user_input for consistent state management
-        state["user_input"] = ""
-        return state
-
-    state["messages"].append({
-        "role": "assistant",
-        "content": f"Danke! Mandant erfasst: clientIdentCode={prov['clientIdentCode']}"
-    })
-
-    state["user_input"] = ""
-    return state
+    return {
+        "provisioning": prov,
+        "messages": confirmation_msgs + [
+            AIMessage(
+                content=f"Danke! Mandant erfasst: clientIdentCode={prov['clientIdentCode']}")
+        ]
+    }
 
 
-def ask_wsm_node(state: State) -> State:
-    prov = state.setdefault("provisioning", {})
-    user_input = state.get("user_input") or ""
+def ask_wsm_node(state: State) -> dict:
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+    prov = state.get("provisioning", {})
 
-    if "wsm_user_configured" not in prov:
-        guess = parse_wsm_user(user_input)
-        if guess is not None:
-            prov["wsm_user_configured"] = guess
+    # Try to parse WSM user status from input
+    is_wsm_configured = parse_wsm_user(user_input) if user_input else None
+    if is_wsm_configured is not None:
+        prov["wsm_user_configured"] = is_wsm_configured
 
-    if "wsm_user_configured" not in prov:
-        state["messages"].append({
-            "role": "assistant",
-            "content": (
-                "3) **WSM Benutzer für Authentifizierung**:\n"
-                "- Zusätzlich zum Mandanten gibt es einen **technischen WSM-Benutzer** inkl. Passwort für die API-Anbindung.\n"
-                "Ist dieser Benutzer bereits eingerichtet? (Ja/Nein)"
-            )
-        })
-        return state
+    if not prov.get("wsm_user_configured"):
+        return {
+            "provisioning": prov,
+            "messages": [
+                AIMessage(content=(
+                    "3) **WSM Benutzer für Authentifizierung**:\n"
+                    "- Zusätzlich zum Mandanten gibt es einen **technischen WSM-Benutzer** inkl. Passwort für die API-Anbindung.\n"
+                    "Ist dieser Benutzer bereits eingerichtet? (Ja/Nein)"
+                ))
+            ]
+        }
 
     yn = "Ja" if prov["wsm_user_configured"] else "Nein"
-    state["messages"].append(
-        {"role": "assistant", "content": f"WSM-Benutzer vorhanden: {yn}."})
+    return {
+        "provisioning": prov,
+        "messages": [
+            AIMessage(content=f"WSM-Benutzer vorhanden: {yn}.")
+        ]
+    }
 
-    state["user_input"] = ""
-    return state
 
-
-def guide_use_cases_node(state: State) -> State:
+# TODO: Hardcode this response. Dont need to waste llm tokens here...
+def guide_use_cases_node(state: State) -> dict:
     prov = state.get("provisioning", {})
     snippets = rag_search(
         "AEB screening API endpoints auth clientIdentCode suppressLogging screeningLogEntry batch 100", k=3
     )
 
+    # TODO: Define some standard prompts somewhere
     sys = SystemMessage(content=(
         "Du bist ein AEB-Trade-Compliance Onboarding-Assistent. "
         "Antworte präzise auf Deutsch, stichpunktartig, ohne Marketingfloskeln."
@@ -278,31 +291,27 @@ Berücksichtige (falls vorhanden) Doku-Auszüge:
 {snippets if snippets else '[keine RAG-Snippets gefunden]'}
 """)
     resp = llm.invoke([sys, human])
-    state["messages"].append({"role": "assistant", "content": resp.content})
 
-    state["completed"] = True
+    return {
+        "completed": True,
+        "messages": [resp]
+    }
 
-    return state
 
-
-def qa_mode_node(state: State) -> State:
+def qa_mode_node(state: State) -> dict:
     """Handle free-flowing Q&A after the initial flow is completed."""
     prov = state.get("provisioning", {})
-    user_question = state.get("user_input", "")
+    messages = state.get("messages", [])
+    user_question = get_latest_user_message(messages)
 
     # If no question provided, show prompt and wait for input
-    if not user_question.strip():
-        state["messages"].append({
-            "role": "assistant",
-            "content": "Wie kann ich dir bei der TCM Screening API Integration helfen? Stelle gerne deine Frage!"
-        })
-        # Clear user_input for consistent state management
-        state["user_input"] = ""
-        return state
+    if not user_question or not user_question.strip():
+        prompt_msg = AIMessage(
+            content="Wie kann ich dir bei der TCM Screening API Integration helfen? Stelle gerne deine Frage!")
+        return { "messages": [prompt_msg] }
 
-    # Search for relevant information with more specific terms
     snippets = rag_search(
-        f"screening request example JSON REST API {user_question}", k=5)
+        f"Question about Screening API: {user_question}", k=5)
 
     # Build context from provisioning data
     context_info = []
@@ -344,28 +353,29 @@ WICHTIG: Nutze die Dokumentationsauszüge als primäre Quelle und verwende die k
 """)
 
     resp = llm.invoke([sys, human])
-    state["messages"].append({"role": "assistant", "content": resp.content})
 
-    state["user_input"] = ""
-
-    return state
+    return {
+        "messages": [resp]
+    }
 
 
 def route_from_intro(state: State) -> str:
     """Route from intro based on user response and current state."""
 
+    # TODO: Can remove this when I implement the looping in qa_mode with interrupt
     if state.get("completed", False):
         return "qa_mode"
 
-    # Wait for user input instead of looping
-    user_input = state.get("user_input", "")
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+
     if not user_input:
         return END
 
     if state.get("started", False):
         prov = state.get("provisioning", {})
 
-        if no_endpoint_information(prov):
+        if not has_endpoint_information(prov):
             return "ask_endpoints"
 
         if not prov.get("clientIdentCode"):
@@ -392,67 +402,45 @@ def route_from_intro(state: State) -> str:
 def route_from_endpoints(state: State) -> str:
     """Route from endpoints based on current provisioning state."""
     prov = state.get("provisioning", {})
-    user_input = state.get("user_input", "")
+    messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
 
-    if user_input.strip() and no_endpoint_information(prov):
+    if user_input.strip() and not has_endpoint_information(prov):
         return "clarify"
 
-    # If no endpoints and no input, wait for input
-    if no_endpoint_information(prov):
+    if not has_endpoint_information(prov):
         return END
 
     return "ask_client"
 
 
 def route_from_clarify(state: State) -> str:
-    """Route from clarify node - determine what type of input was expected and handle accordingly."""
-    user_input = state.get("user_input", "")
+    """Route from clarify node - after clarification, route back to appropriate node."""
     messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
     prov = state.get("provisioning", {})
 
     if not user_input:
         return END
-
-    # TODO: This entire logic can maybe be solved by a llm call instead of programtically
-    # If we haven't started yet, we're expecting yes/no to begin
-    if not state.get("started", False):
-        yn = parse_yes_no(user_input or "")
-
-        if yn is None:
-            return "clarify"
-        elif yn is False:
-            return END
-        else:
-            return "ask_endpoints"
-
-    # If we've started but don't have endpoints, we're expecting endpoints
-    elif no_endpoint_information(prov):
-
-        found = parse_endpoints(user_input)
-
-        single = URL_RE.findall(user_input)
-        if single and len(single) == 1 and not found:
-            found = {"test_endpoint": single[0]}
-
-        if found and (found.get("test_endpoint") or found.get("prod_endpoint")):
-            prov = state.setdefault("provisioning", {})
-            prov.update(found)
-
-            state["started"] = True
-            return "ask_client"
-        else:
-            # Still invalid endpoints - stay in clarify mode
-            return "clarify"
-
-    # TODO: Add handling for other clarification types (client, WSM) when we add clarify nodes for those
+    if not has_endpoint_information(prov):
+        return "ask_endpoints"
+    if not prov.get("clientIdentCode"):
+        return "ask_client"
+    if "wsm_user_configured" not in prov:
+        return "ask_wsm"
     else:
-        return "clarify"
+        return "intro"
 
 
 def route_from_client(state: State) -> str:
     """Route from client based on current provisioning state."""
     prov = state.get("provisioning", {})
-    # TODO: add clarify node
+    messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
+
+    if user_input.strip() and not prov.get("clientIdentCode"):
+        return "clarify"
+
     if not prov.get("clientIdentCode"):
         return END
 
@@ -462,8 +450,13 @@ def route_from_client(state: State) -> str:
 def route_from_wsm(state: State) -> str:
     """Route from WSM based on current provisioning state."""
     prov = state.get("provisioning", {})
-    # TODO: add clarify node
-    if "wsm_user_configured" not in prov:
+    messages = state.get("messages", [])
+    user_input = get_latest_user_message(messages)
+
+    if user_input.strip() and not prov.get("wsm_user_configured"):
+        return "clarify"
+
+    if not prov.get("wsm_user_configured"):
         return END
 
     return "guide_use_cases"
@@ -476,12 +469,7 @@ def route_from_guide(state: State) -> str:
 
 def route_from_qa(state: State) -> str:
     """Q&A mode - check if we should continue or end."""
-    user_input = state.get("user_input", "")
-
-    if not user_input or user_input.lower() in ['quit', 'exit', 'bye', 'done']:
-        return END
-
-    return "qa_mode"
+    return END
 
 
 def build_graph():
@@ -503,11 +491,14 @@ def build_graph():
     g.add_conditional_edges("intro", route_from_intro, {
         "qa_mode": "qa_mode",
         "ask_endpoints": "ask_endpoints",
+        "ask_client": "ask_client",
+        "ask_wsm": "ask_wsm",
         "clarify": "clarify",
         "__end__": END
     })
     g.add_conditional_edges("clarify", route_from_clarify, {
         "clarify": "clarify",
+        "intro": "intro",
         "ask_endpoints": "ask_endpoints",
         "ask_client": "ask_client",
         "__end__": END
@@ -518,10 +509,12 @@ def build_graph():
         "__end__": END
     })
     g.add_conditional_edges("ask_client", route_from_client, {
+        "clarify": "clarify",
         "ask_wsm": "ask_wsm",
         "__end__": END
     })
     g.add_conditional_edges("ask_wsm", route_from_wsm, {
+        "clarify": "clarify",
         "guide_use_cases": "guide_use_cases",
         "__end__": END
     })

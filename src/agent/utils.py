@@ -1,5 +1,6 @@
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Sequence, List
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
 
 URL_RE = re.compile(r"https?://[^\s]+", re.I)
@@ -71,5 +72,64 @@ def parse_yes_no(text: str) -> Optional[bool]:
 
     return None
 
-def no_endpoint_information(prov: Dict[str, str]) -> bool:
-    return not (prov.get("test_endpoint") or prov.get("prod_endpoint"))
+
+def has_endpoint_information(prov: Dict[str, str]) -> bool:
+    return any(prov.get(key) for key in ["test_endpoint", "prod_endpoint"])
+
+
+def format_endpoints_message(found: Dict[str, str]) -> List[str]:
+    lines = []
+    if found.get("test_endpoint"):
+        lines.append(f"- Test: {found['test_endpoint']}")
+    if found.get("prod_endpoint"):
+        lines.append(f"- Prod:  {found['prod_endpoint']}")
+    if len(lines) == 1:
+        lines.append(
+            "Hinweis: Den zweiten Endpoint (Test/Prod) können Sie später ergänzen.")
+    return lines
+
+
+def get_last_user_message(messages: Sequence[BaseMessage]) -> str:
+    """Extract the content from the last human message."""
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            content = message.content
+            if isinstance(content, str):
+                return content
+    return ""
+
+
+def get_latest_user_message(messages: Sequence[BaseMessage]) -> str:
+    """Extract the content from the last message, regardless of type."""
+    if not messages:
+        return ""
+    last_message = messages[-1]
+    if isinstance(last_message, HumanMessage):
+        content = last_message.content
+        if isinstance(content, str):
+            return content
+    return ""
+
+
+def get_last_assistant_message(messages: Sequence[BaseMessage]) -> str:
+    """Extract the content from the last assistant message."""
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            content = message.content
+            if isinstance(content, str):
+                return content
+            elif isinstance(content, list):
+                # Handle list content by joining string parts
+                return " ".join(str(part) for part in content if isinstance(part, str))
+    return ""
+
+
+def get_message_content(message: BaseMessage) -> str:
+    """Extract string content from any message."""
+    content = message.content
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        # Handle list content by joining string parts
+        return " ".join(str(part) for part in content if isinstance(part, str))
+    return ""
