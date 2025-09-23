@@ -96,6 +96,10 @@ def get_last_user_message(messages: Sequence[BaseMessage]) -> str:
             content = message.content
             if isinstance(content, str):
                 return content
+            elif isinstance(content, list):
+                return " ".join(
+                    part["text"] for part in content if isinstance(part, dict) and "text" in part
+                )
     return ""
 
 
@@ -108,6 +112,11 @@ def get_latest_user_message(messages: Sequence[BaseMessage]) -> str:
         content = last_message.content
         if isinstance(content, str):
             return content
+        # TODO: Why does the content from the chat look different?
+        elif isinstance(content, list):
+            return " ".join(
+                part["text"] for part in content if isinstance(part, dict) and "text" in part
+            )
     return ""
 
 
@@ -119,8 +128,9 @@ def get_last_assistant_message(messages: Sequence[BaseMessage]) -> str:
             if isinstance(content, str):
                 return content
             elif isinstance(content, list):
-                # Handle list content by joining string parts
-                return " ".join(str(part) for part in content if isinstance(part, str))
+                return " ".join(
+                    part["text"] for part in content if isinstance(part, dict) and "text" in part
+                )
     return ""
 
 
@@ -130,6 +140,7 @@ def get_message_content(message: BaseMessage) -> str:
     if isinstance(content, str):
         return content
     elif isinstance(content, list):
-        # Handle list content by joining string parts
-        return " ".join(str(part) for part in content if isinstance(part, str))
+        return " ".join(
+            part["text"] for part in content if isinstance(part, dict) and "text" in part
+        )
     return ""

@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph.message import add_messages
+from langgraph.types import interrupt
 from typing import Dict, List, Any, TypedDict, Annotated, Sequence
 
 from agent.rag import rag_search
@@ -18,6 +21,11 @@ llm = ChatOpenAI(model=Config.OPENAI_MODEL, temperature=0)
 class State(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
     provisioning: Dict[str, Any]
+
+    decision: str | None  # continue or qa
+    pending_question: str | None  # the user's question to feed into qa_mode
+    next_node_after_qa: str
+
     started: bool
     completed: bool
     rag_snippets: List[str]
@@ -42,6 +50,8 @@ def intro_node(state: State) -> dict:
         }
 
     yn = parse_yes_no(user_input)
+    if yn is None:
+        return {}
     if yn is False:
         return {
             "completed": True,
@@ -90,7 +100,7 @@ def route_from_intro(state: State) -> str:
             return "ask_wsm"
 
         # All good -> guide
-        return "guide_use_cases"
+        return "general_screening_info"
 
     # If user hasn't started yet, check their yes/no response
     yn = parse_yes_no(user_input or "")
@@ -174,15 +184,15 @@ def ask_endpoints_node(state: State) -> dict:
         }
 
     prov = state.get("provisioning", {})
-    found = parse_endpoints(user_input)
+    found_endpoints = parse_endpoints(user_input)
 
     # If exactly one URL and no prior endpoints, accept as test by default
     single = URL_RE.findall(user_input)
-    if single and len(single) == 1 and not found and not has_endpoint_information(prov):
-        found = {"test_endpoint": single[0]}
+    if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
+        found_endpoints = {"test_endpoint": single[0]}
 
     # If user provided input but parsing failed, route to clarify
-    if not has_endpoint_information(prov) and not found:
+    if not has_endpoint_information(prov) and not found_endpoints:
         if user_input.strip():
             return {}
 
@@ -201,9 +211,9 @@ def ask_endpoints_node(state: State) -> dict:
             ]
         }
 
-    prov.update(found)
+    prov.update(found_endpoints)
 
-    lines = format_endpoints_message(found)
+    lines = format_endpoints_message(found_endpoints)
 
     return {
         "started": True,
@@ -247,27 +257,6 @@ def ask_client_node(state: State) -> dict:
                 ))
             ]
         }
-
-    # # Check if we just came from clarify_endpoints and need to show confirmation
-    # # We can detect this by checking if we have endpoints but no confirmation message yet
-    # if has_endpoint_information(prov):
-    #     # Check if we already showed endpoints confirmation by looking at recent messages
-    #     recent_messages = messages[-3:] if len(messages) >= 3 else messages
-    #     has_endpoints_confirmation = any("Danke! Endpoints erfasst" in get_message_content(msg)
-    #                                      for msg in recent_messages if isinstance(msg, AIMessage))
-
-    #     if not has_endpoints_confirmation:
-    #         # Show endpoints confirmation
-    #         lines = []
-    #         if prov.get("test_endpoint"):
-    #             lines.append(f"- Test: {prov['test_endpoint']}")
-    #         if prov.get("prod_endpoint"):
-    #             lines.append(f"- Prod:  {prov['prod_endpoint']}")
-
-    #         confirmation_msgs.append(
-    #             AIMessage(content="Danke! Endpoints erfasst:\n" +
-    #                       "\n".join(lines))
-    #         )
 
     if user_input:
         prov = {**prov, "clientIdentCode": parse_client_ident(user_input)}
@@ -352,76 +341,418 @@ def route_from_wsm(state: State) -> str:
     if not prov.get("wsm_user_configured"):
         return END
 
-    return "guide_use_cases"
+    return "general_screening_info"
 
 
-# TODO: Hardcode this response. Dont need to waste llm tokens here...
 def general_screening_info_node(state: State) -> dict:
     prov = state.get("provisioning", {})
+    response_content = f"""
+### Anleitung zur Erst-Integration der Sanktionslistenprüfung
+
+#### 1. Formate
+- **JSON/REST**: Nutzung der REST-API für die Kommunikation.
+
+#### 2. Prüfrelevante Objekte
+- **Stammdaten**: Einzelprüfung oder Bulk (max. 100 Einträge).
+- **Transaktionen**: Prüfung bei Anlage oder Änderung.
+
+#### 3. Felder
+- **Pflichtfelder**:
+  - Name
+  - Adresse
+  - Eindeutige Referenz
+- **Prüfrelevante Felder**:
+  - Adresstyp
+- **Optionale Felder**: Keine spezifischen optionalen Felder definiert.
+
+#### 4. Trigger
+- **Anlage/Änderung**: Automatische Prüfung bei neuen oder geänderten Stammdaten und Transaktionen.
+- **Periodische Batchprüfung**: Empfohlen 1× pro Monat.
+
+#### 5. Anbindungsvarianten
+- **a) Einseitige Übergabe via screenAddresses**:
+  - Response: Treffer/Nichttreffer
+  - E-Mail an TCM-Empfänger
+  - Manuelles (Ent-)Sperren erforderlich
+
+- **b) Übergabe + regelmäßige Nachprüfung**:
+  - Parameter: `suppressLogging=true`
+  - Frequenz: Alle 60 Minuten
+  - Automatische Entsperrung nach Good-Guy
+
+- **c) Optionaler Deep-Link via screeningLogEntry**:
+  - Temporärer Link
+  - Integration als Button/Menu im Partnersystem
+
+#### 6. Response-Szenarien
+- **matchFound=true & wasGoodGuy=false**:
+  - Ergebnis: Treffer
+  - Aktion: (Optional) Sperre/Benachrichtigung
+
+- **matchFound=false & wasGoodGuy=false**:
+  - Ergebnis: Kein Treffer
+  - Aktion: Keine
+
+- **matchFound=false & wasGoodGuy=true**:
+  - Ergebnis: Kein Treffer (bereits Good-Guy)
+  - Aktion: Keine
+
+#### Endpoints
+- **Test-Endpoint**: {prov.get('test_endpoint') or '<fehlt>'}
+- **Prod-Endpoint**: {prov.get('prod_endpoint') or '<fehlt>'}
+- **Mandant (clientIdentCode)**: {prov.get('clientIdentCode') or '<fehlt>'}
+- **WSM Benutzer vorhanden**: {('Ja' if prov.get('wsm_user_configured') else 'Nein' if prov.get('wsm_user_configured') is not None else '<unbekannt>')}
+
+#### Hinweise
+- Log-Einträge können in Compliance Screening Logs erstellt werden, um einen zentralen Audit-Trail zu führen.
+- Technische Überwachung der Aktualität der Sanktionslisten ist möglich, um z. B. Firewall-Probleme zu identifizieren.
+"""
+
+    return {
+        "messages": [AIMessage(content=response_content)],
+        "next_node_after_qa": "explain_screening_variants",
+    }
+
+
+def route_from_general_screening_info(state: State) -> str:
+    return "decision_interrupt"
+
+
+def decision_interrupt_node(state: State) -> dict:
+    payload = interrupt({
+        "type": "choice_or_question",
+        "prompt": "Schreibe `weiter` zum Fortfahren oder stelle deine Frage.",
+    })
+
+    decision, question = None, None
+
+    if isinstance(payload, dict):
+        if payload.get("continue") is True or str(payload.get("continue")).lower() in {"true", "1", "yes"}:
+            decision = "continue"
+        elif "question" in payload:
+            decision = "qa"
+            question = str(payload["question"]).strip()
+    else:
+        raise ValueError(f"Unexpected interrupt payload type: {type(payload)}")
+
+    if decision is None:
+        decision = "qa"
+        question = (question or "").strip()
+
+    out = {"decision": decision, "pending_question": question}
+    if question:
+        out["messages"] = [HumanMessage(content=question)]
+    return out
+
+
+def route_from_decision_interrupt(state: State) -> str:
+    if state.get("decision") == "continue":
+        return state.get("next_node_after_qa", "explain_screening_variants")
+    return "qa_mode"
+
+
+def explain_screening_variants_node(state: State) -> dict:
+    """Explain the three screening variants for API integration."""
+    response_content = """
+## Drei Varianten für die Sanktionslistenprüfung per API
+
+### 1. Einseitige Datenübergabe (Basis-Variante)
+
+**Funktionsweise:**
+- Übergabe einzelner Geschäftspartner oder Transaktionsdaten via `screenAddresses`
+- Datensatz sollte Name, Adresse, eindeutige Referenz und Adresstyp enthalten
+- Prüfung gegen Sanktionslisten, Protokollierung in TCM
+- Response: Treffer/Nichttreffer direkt im API-Response
+
+**Workflow bei Treffer:**
+- Optional: Automatische Sperre im Partnersystem oder Benutzerbenachrichtigung
+- E-Mail-Versendung an konfigurierten TCM-Empfänger (Compliance-Verantwortlicher)
+- Manuelle Bearbeitung in TCM: Good-Guy-Definition oder Treffer-Bestätigung
+- Entsperrung im Partnersystem erfolgt manuell nach Good-Guy-Definition
+
+### 2. Übergabe mit automatischer Nachprüfung (Erweiterte Variante)
+
+**Zusätzliche Funktionalität:**
+- Regelmäßige automatische Nachprüfung offener Treffer (z.B. alle 60 Minuten)
+- Verwendung derselben `screenAddresses` API mit Parameter `suppressLogging=true`
+- Automatische Entsperrung nach Good-Guy-Definition in TCM
+
+**Implementierung:**
+- Partnersystem speichert Objekte mit Adresstreffern
+- Periodische Wiederholung der Prüfung mit `suppressLogging=true`
+- Automatisches Entsperren bei Good-Guy-Status
+
+### 3. Deep-Link Integration (Komfort-Funktion)
+
+**Zusätzliche Schnittstelle:**
+- API `screeningLogEntry` für temporäre Weblinks zur TCM-Trefferbearbeitung
+- Implementierung als Button/Menüeintrag im Partnersystem
+- Direkter Zugang zur Bearbeitungsmaske in TCM
+
+**Anwendung:**
+- Benutzer kann Treffer direkt aus dem Partnersystem heraus bearbeiten
+- Link nur temporär gültig - daher on-demand Generierung erforderlich
+- Erhöht Benutzerfreundlichkeit und Workflow-Effizienz
+
+### Empfehlung
+- **Variante 1:** Für einfache Integration, manuelle Nachbearbeitung akzeptabel
+- **Variante 2:** Für automatisierte Workflows, reduziert manuellen Aufwand
+- **Variante 3:** Zusätzlich zu Variante 1 oder 2 für optimale Benutzererfahrung
+"""
+
+    return {
+        "messages": [AIMessage(content=response_content)],
+        "next_node_after_qa": "explain_responses",
+    }
+
+
+def route_from_explain_screening_variants(state: State) -> str:
+    return "decision_interrupt"
+
+
+def explain_responses_node(state: State) -> dict:
+    """Explain the different response scenarios from the screening API."""
+    response_content = """
+## API Response-Szenarien und Systemreaktionen
+
+Die Sanktionslistenprüfung liefert verschiedene Response-Kombinationen, die unterschiedliche Aktionen im Partnersystem erfordern:
+
+### 📍 Treffer-Szenario
+```json
+{
+  "matchFound": true,
+  "wasGoodGuy": false
+}
+```
+**Bedeutung:** Sanktionslistentreffer gefunden, noch nicht als unbedenklich eingestuft
+
+**Empfohlene Systemreaktion:**
+- 🔒 **Automatische Sperre** des Geschäftspartners/der Transaktion
+- 📧 **Benachrichtigung** an Compliance-Verantwortliche
+- 🚫 **Blockierung** weiterer Geschäftsprozesse bis zur manuellen Freigabe
+- 📝 **Logging** der Sperrung für Audit-Zwecke
+
+### ✅ Unbedenklich-Szenario
+```json
+{
+  "matchFound": false,
+  "wasGoodGuy": false
+}
+```
+**Bedeutung:** Keine Sanktionslistentreffer gefunden
+
+**Empfohlene Systemreaktion:**
+- ✅ **Keine Aktion erforderlich** - Geschäftsprozess kann fortgesetzt werden
+- 📝 **Optional:** Protokollierung der erfolgreichen Prüfung
+
+### 🟢 Good-Guy-Szenario
+```json
+{
+  "matchFound": false,
+  "wasGoodGuy": true
+}
+```
+**Bedeutung:** Bereits als unbedenklich (Good-Guy) klassifiziert, daher keine erneute Prüfung
+
+**Empfohlene Systemreaktion:**
+- ✅ **Keine Aktion erforderlich** - Good-Guy-Status bestätigt
+- 📝 **Optional:** Vermerk über Good-Guy-Status im System
+- ⚡ **Performance-Vorteil** durch verkürzte Prüfzeit
+"""
+
+    return {
+        "messages": [AIMessage(content=response_content)],
+        "next_node_after_qa": "api_mapping_intro",
+    }
+
+
+def route_from_explain_responses(state: State) -> str:
+    return "decision_interrupt"
+
+
+def api_mapping_intro_node(state: State) -> dict:
+    """Introduce the API mapping service and gather initial system information."""
+    response_content = """
+## 🔄 API Mapping Service
+
+Jetzt können wir Ihnen beim Mapping Ihrer bestehenden API-Struktur auf die AEB TCM Screening API helfen.
+
+**Was wir benötigen:**
+
+### 1. System-Information
+Bitte beschreiben Sie:
+- **Systemname/Typ:** Welches System möchten Sie anbinden? (z.B. SAP, Salesforce, Custom ERP)
+- **Prozess:** Welcher Geschäftsprozess soll integriert werden? (z.B. Kundenanlage, Bestellverarbeitung, Lieferantenprüfung)
+
+### 2. API-Metadaten
+Wir benötigen Ihre bestehende API-Struktur in einem der folgenden Formate:
+- **JSON-Schema** Ihrer Adress-/Partnerdaten
+- **XML-Beispiel** einer typischen Datenanfrage
+- **CSV-Struktur** mit Feldnamen und -beschreibungen
+- **OpenAPI/Swagger** Definition
+
+**Nächster Schritt:** Bitte nennen Sie zunächst Ihr **Systemname** und den **anzubindenden Prozess**.
+"""
+
+    return {
+        "messages": [AIMessage(content=response_content)]
+    }
+
+
+def route_from_api_mapping_intro(state: State) -> str:
+    """Route from API mapping intro - check if system info provided."""
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+
+    if not user_input or not user_input.strip():
+        return END
+
+    return "collect_api_metadata"
+
+
+def collect_api_metadata_node(state: State) -> dict:
+    """Collect API metadata from the customer."""
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+
+    # Extract system information from previous input
+    system_info = user_input if user_input else "Nicht spezifiziert"
+
+    response_content = f"""
+## 📊 API-Metadaten erfassen
+
+**System:** {system_info}
+
+Bitte stellen Sie uns Ihre API-Metadaten zur Verfügung. Sie haben mehrere Möglichkeiten:
+
+### Option 1: JSON-Struktur direkt eingeben
+Kopieren Sie Ihre JSON-Struktur hier hinein:
+```json
+{{
+  "customer": {{
+    "name": "Beispiel GmbH",
+    "address": "Musterstraße 1",
+    // ... weitere Felder
+  }}
+}}
+```
+
+### Option 2: Schema-Beschreibung
+Beschreiben Sie Ihre Datenfelder strukturiert:
+```
+Feldname | Datentyp | Beschreibung | Beispiel
+name | String | Firmenname | "ACME Corp"
+street | String | Straße | "Main St 123"
+country | String | Land | "DE"
+```
+
+### Option 3: Beispiel-Datensatz
+Geben Sie einen anonymisierten Beispiel-Datensatz ein.
+
+**Wichtig:** 
+- Verwenden Sie **keine echten Daten** - nur Beispiele oder Schema-Informationen
+- Fokus auf **Adress- und Partnerfelder** für die Sanktionslistenprüfung
+
+**Bitte geben Sie Ihre API-Struktur ein:**
+"""
+
+    return {
+        "messages": [AIMessage(content=response_content)]
+    }
+
+
+def route_from_collect_api_metadata(state: State) -> str:
+    """Route from API metadata collection."""
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+
+    if not user_input or not user_input.strip():
+        return END
+
+    return "process_and_map_api"
+
+
+def process_and_map_api_node(state: State) -> dict:
+    """Process customer API metadata and generate mapping suggestions."""
+    messages = state.get("messages", [])
+    user_input = get_last_user_message(messages)
+    prov = state.get("provisioning", {})
+
     snippets = rag_search(
-        "AEB screening API endpoints auth clientIdentCode suppressLogging screeningLogEntry batch 100", k=3
+        "API field mapping screenAddresses JSON addressType name street city clientIdentCode", k=5
     )
 
-    # TODO: Define some standard prompts somewhere
     sys = SystemMessage(content=(
-        "Du bist ein AEB-Trade-Compliance Onboarding-Assistent. "
-        "Antworte präzise auf Deutsch, stichpunktartig, ohne Marketingfloskeln."
+        "Du bist ein Experte für API-Mapping zwischen Kundensystemen und der AEB TCM Screening API. "
+        "Analysiere die vom Kunden bereitgestellten API-Metadaten und erstelle ein präzises Mapping "
+        "auf die AEB screenAddresses API-Struktur. Berücksichtige dabei die verfügbare Dokumentation."
     ))
+
     human = HumanMessage(content=f"""
-Erzeuge eine kurze Anleitung für die Erst-Integration der Sanktionslistenprüfung.
+Analysiere die folgenden Kunden-API-Metadaten und erstelle ein detailliertes Mapping zur AEB TCM Screening API:
 
-Kontext:
-- Test-Endpoint: {prov.get('test_endpoint') or '<fehlt>'}
-- Prod-Endpoint: {prov.get('prod_endpoint') or '<fehlt>'}
-- Mandant (clientIdentCode): {prov.get('clientIdentCode') or '<fehlt>'}
-- WSM Benutzer vorhanden: {('Ja' if prov.get('wsm_user_configured') else 'Nein' if prov.get('wsm_user_configured') is not None else '<unbekannt>')}
+**Kunden-API-Struktur:**
+```
+{user_input}
+```
 
-Bitte decke ab:
-1) Formate (JSON/REST).
-2) Prüfrelevante Objekte (Stammdaten einzeln/Bulk ≤100; Transaktionen).
-3) Felder: Pflicht / prüfrelevant / optional (Name, Adresse, eindeutige Referenz, Adresstyp).
-4) Trigger: Anlage/Änderung Stammdaten & Transaktionen; periodische Batchprüfung (z. B. 1×/Monat).
-5) Drei Anbindungsvarianten:
-   a) Einseitige Übergabe via screenAddresses (Response → Treffer/Nichttreffer; E-Mail an TCM-Empfänger; manuelles (Ent-)Sperren).
-   b) Übergabe + regelmäßige Nachprüfung mit suppressLogging=true (z. B. alle 60 Min.) zur automatischen Entsperrung nach Good-Guy.
-   c) Optionaler Deep-Link via screeningLogEntry (temporärer Link; Button/Menu im Partnersystem).
-6) Response-Szenarien:
-   - matchFound=true & wasGoodGuy=false → Treffer → (optional) Sperre/Benachrichtigung.
-   - matchFound=false & wasGoodGuy=false → kein Treffer → keine Aktion.
-   - matchFound=false & wasGoodGuy=true → kein Treffer (bereits Good-Guy) → keine Aktion.
+**Verfügbare AEB Konfiguration:**
+- Test-Endpoint: {prov.get('test_endpoint', 'N/A')}
+- Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')} 
+- ClientIdentCode: {prov.get('clientIdentCode', 'N/A')}
 
-Berücksichtige (falls vorhanden) Doku-Auszüge:
-{snippets if snippets else '[keine RAG-Snippets gefunden]'}
+**Aufgabe:**
+1. **Feldmapping analysieren:** Identifiziere Kunden-Felder und weise sie AEB-Feldern zu
+2. **Transformationen vorschlagen:** Beschreibe notwendige Datenkonvertierungen
+3. **JSON-Beispiel generieren:** Erstelle ein vollständiges screenAddresses Request-Beispiel
+4. **Validierungsregeln:** Definiere Datenqualitätsprüfungen
+5. **Implementierungshinweise:** Gebe praktische Umsetzungstipps
+
+**Berücksichtige AEB API Dokumentation:**
+{snippets if snippets else '[Keine Dokumentation verfügbar]'}
+
+Strukturiere deine Antwort klar und praxisorientiert mit JSON-Beispielen.
 """)
+
     resp = llm.invoke([sys, human])
 
     return {
-        "completed": True,
         "messages": [resp]
     }
 
 
-def route_from_guide(state: State) -> str:
-    """Route from guide - mark as completed and go to Q&A mode."""
+def route_from_process_and_map_api(state: State) -> str:
+    """Route from API processing - check if user wants clarifications."""
     return "qa_mode"
 
 
 def qa_mode_node(state: State) -> dict:
     """Handle free-flowing Q&A after the initial flow is completed."""
     prov = state.get("provisioning", {})
-    messages = state.get("messages", [])
-    user_question = get_latest_user_message(messages)
+    question = (state.get("pending_question") or "").strip()
 
-    # If no question provided, show prompt and wait for input
-    if not user_question or not user_question.strip():
-        prompt_msg = AIMessage(
-            content="Wie kann ich dir bei der TCM Screening API Integration helfen? Stelle gerne deine Frage!")
-        return {"messages": [prompt_msg]}
+    if not question:
+        payload = interrupt({
+            "type": "question_or_continue",
+            "prompt": "Wie kann ich dir bei der TCM Screening API Integration helfen? "
+                      "Stelle deine Frage – oder schreibe `weiter`, um fortzufahren.",
+        })
+        if isinstance(payload, dict):
+            if payload.get("continue") is True or str(payload.get("continue")).lower() in {"true", "1", "yes"}:
+                return {"decision": "continue"}
+            elif "question" in payload:
+                decision = "qa"
+                question = str(payload["question"]).strip()
+        else:
+            raise ValueError(
+                f"Unexpected interrupt payload type: {type(payload)}")
 
-    snippets = rag_search(
-        f"Question about Screening API: {user_question}", k=5)
+    # If still no question stay here
+    if not question:
+        return {"decision": "qa"}
 
-    # Build context from provisioning data
+    snippets = rag_search(f"Question about Screening API: {question}", k=5)
+
     context_info = []
     if prov.get("test_endpoint"):
         context_info.append(f"Test-Endpoint: {prov['test_endpoint']}")
@@ -448,7 +779,7 @@ def qa_mode_node(state: State) -> dict:
         snippets)]) if snippets else '[Keine passenden Dokumentationsauszüge gefunden]'
 
     human = HumanMessage(content=f"""
-Benutzerfrage: {user_question}
+Benutzerfrage: {question}
 
 Verfügbare Konfiguration:
 {context_str}
@@ -461,9 +792,22 @@ WICHTIG: Nutze die Dokumentationsauszüge als primäre Quelle und verwende die k
 """)
 
     resp = llm.invoke([sys, human])
-    return { "messages": [resp] }
+
+    decision, question = None, None
+
+    if decision is None:
+        decision = "qa"
+        question = (question or "").strip()
+
+    return {
+        "messages": [resp],
+        "decision": decision or "qa",
+        "pending_question": question,
+    }
 
 
-def route_from_qa(state: State) -> str:
-    """Q&A mode - check if we should continue or end."""
-    return END
+def route_from_qa_mode(state: State, config: RunnableConfig) -> str:
+    decision = state.get("decision")
+    if decision == "continue":
+        return state.get("next_node_after_qa")
+    return "qa_mode"
