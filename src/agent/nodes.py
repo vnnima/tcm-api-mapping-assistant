@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from langgraph.types import interrupt
 from typing import Dict, List, Any, TypedDict, Annotated, Sequence
 
-from agent.rag import rag_search
+from agent.rag import rag_search, build_index
 from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
                          parse_wsm_user, parse_yes_no, has_endpoint_information,
                          get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
@@ -25,6 +25,11 @@ class State(TypedDict):
     decision: str | None  # continue or qa
     pending_question: str | None  # the user's question to feed into qa_mode
     next_node_after_qa: str
+
+    # API Mapping Stuff
+    system_name: str | None
+    process: str | None
+    api_metadata: str | None
 
     started: bool
     completed: bool
@@ -595,80 +600,45 @@ Wir benötigen Ihre bestehende API-Struktur in einem der folgenden Formate:
 """
 
     return {
-        "messages": [AIMessage(content=response_content)]
+        "messages": [AIMessage(content=response_content)],
+        "next_node_after_qa": "process_and_map_api",
     }
 
 
 def route_from_api_mapping_intro(state: State) -> str:
     """Route from API mapping intro - check if system info provided."""
-    messages = state.get("messages", [])
-    user_input = get_last_user_message(messages)
-
-    if not user_input or not user_input.strip():
-        return END
-
-    return "collect_api_metadata"
+    return "get_api_data_interrupt"
 
 
-def collect_api_metadata_node(state: State) -> dict:
-    """Collect API metadata from the customer."""
-    messages = state.get("messages", [])
-    user_input = get_last_user_message(messages)
+def get_api_data_interrupt_node(state: State) -> dict:
+    payload = interrupt({
+        "type": "get_api_data",
+        "prompt": "Bitte geben Sie Ihren Systemnamen, Prozess und bestehenden API-Metadaten an (z.B. JSON-Schema, XML-Beispiel, CSV-Struktur, OpenAPI/Swagger Definition).",
+    })
 
-    # Extract system information from previous input
-    system_info = user_input if user_input else "Nicht spezifiziert"
+    system_name, process, api_metadata = None, None, None
+    print(payload)
+    if isinstance(payload, dict):
+        if payload.get("system_name"):
+            system_name = str(payload["system_name"]).strip()
+        if payload.get("process"):
+            process = str(payload["process"]).strip()
+        if payload.get("api_metadata"):
+            api_metadata = api_metadata  # This is the filename
+    else:
+        raise ValueError(f"Unexpected interrupt payload type: {type(payload)}")
 
-    response_content = f"""
-## 📊 API-Metadaten erfassen
-
-**System:** {system_info}
-
-Bitte stellen Sie uns Ihre API-Metadaten zur Verfügung. Sie haben mehrere Möglichkeiten:
-
-### Option 1: JSON-Struktur direkt eingeben
-Kopieren Sie Ihre JSON-Struktur hier hinein:
-```json
-{{
-  "customer": {{
-    "name": "Beispiel GmbH",
-    "address": "Musterstraße 1",
-    // ... weitere Felder
-  }}
-}}
-```
-
-### Option 2: Schema-Beschreibung
-Beschreiben Sie Ihre Datenfelder strukturiert:
-```
-Feldname | Datentyp | Beschreibung | Beispiel
-name | String | Firmenname | "ACME Corp"
-street | String | Straße | "Main St 123"
-country | String | Land | "DE"
-```
-
-### Option 3: Beispiel-Datensatz
-Geben Sie einen anonymisierten Beispiel-Datensatz ein.
-
-**Wichtig:** 
-- Verwenden Sie **keine echten Daten** - nur Beispiele oder Schema-Informationen
-- Fokus auf **Adress- und Partnerfelder** für die Sanktionslistenprüfung
-
-**Bitte geben Sie Ihre API-Struktur ein:**
-"""
-
-    return {
-        "messages": [AIMessage(content=response_content)]
-    }
+    out: dict = {}
+    if system_name:
+        out["system_name"] = system_name
+    if process:
+        out["process"] = process
+    if api_metadata:
+        out["api_metadata"] = api_metadata
+    return out
 
 
-def route_from_collect_api_metadata(state: State) -> str:
-    """Route from API metadata collection."""
-    messages = state.get("messages", [])
-    user_input = get_last_user_message(messages)
-
-    if not user_input or not user_input.strip():
-        return END
-
+def route_from_get_api_data(state: State) -> str:
     return "process_and_map_api"
 
 
@@ -677,9 +647,11 @@ def process_and_map_api_node(state: State) -> dict:
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
     prov = state.get("provisioning", {})
+    build_index(Config.API_DATA_DIR.as_posix(), Config.API_DATA_VECTOR_STORE)
 
     snippets = rag_search(
-        "API field mapping screenAddresses JSON addressType name street city clientIdentCode", k=5
+        "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
+        store_dir=Config.API_DATA_VECTOR_STORE,
     )
 
     sys = SystemMessage(content=(
@@ -700,6 +672,10 @@ Analysiere die folgenden Kunden-API-Metadaten und erstelle ein detailliertes Map
 - Test-Endpoint: {prov.get('test_endpoint', 'N/A')}
 - Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')} 
 - ClientIdentCode: {prov.get('clientIdentCode', 'N/A')}
+- WSM Benutzer konfiguriert: {('Ja' if prov.get('wsm_user_configured') else 'Nein' if prov.get('wsm_user_configured') is not None else 'Unbekannt')}
+- Systemname: {state.get('system_name', 'N/A')}
+- Prozess: {state.get('process', 'N/A')}
+- API-Metadaten: {state.get('api_metadata', 'N/A')}
 
 **Aufgabe:**
 1. **Feldmapping analysieren:** Identifiziere Kunden-Felder und weise sie AEB-Feldern zu
@@ -723,7 +699,7 @@ Strukturiere deine Antwort klar und praxisorientiert mit JSON-Beispielen.
 
 def route_from_process_and_map_api(state: State) -> str:
     """Route from API processing - check if user wants clarifications."""
-    return "qa_mode"
+    return "decision_interrupt"
 
 
 def qa_mode_node(state: State) -> dict:

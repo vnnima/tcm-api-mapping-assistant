@@ -1,6 +1,7 @@
 from __future__ import annotations
 from langgraph.graph import StateGraph, START, END
-from agent.nodes import State, api_mapping_intro_node, decision_interrupt_node, explain_responses_node, explain_screening_variants_node, intro_node, clarify_node, ask_endpoints_node, ask_client_node, ask_wsm_node, general_screening_info_node, qa_mode_node, route_from_explain_responses, route_from_explain_responses, route_from_explain_screening_variants, route_from_intro, route_from_clarify, route_from_endpoints, route_from_client, route_from_qa_mode, route_from_wsm, route_from_general_screening_info, route_from_qa_mode, route_from_decision_interrupt
+from agent.nodes import (State, api_mapping_intro_node, decision_interrupt_node, explain_responses_node, explain_screening_variants_node, intro_node, clarify_node, ask_endpoints_node, ask_client_node, ask_wsm_node, general_screening_info_node, process_and_map_api_node, qa_mode_node, route_from_explain_responses, route_from_explain_responses,
+                         route_from_explain_screening_variants, route_from_get_api_data, route_from_intro, route_from_clarify, route_from_endpoints, route_from_client, route_from_process_and_map_api, route_from_qa_mode, route_from_wsm, route_from_general_screening_info, route_from_qa_mode, route_from_decision_interrupt, get_api_data_interrupt_node, route_from_api_mapping_intro)
 
 
 def build_graph():
@@ -19,6 +20,8 @@ def build_graph():
     g.add_node("explain_responses", explain_responses_node)
     g.add_node("api_mapping_intro", api_mapping_intro_node)
     g.add_node("decision_interrupt", decision_interrupt_node)
+    g.add_node("get_api_data_interrupt", get_api_data_interrupt_node)
+    g.add_node("process_and_map_api", process_and_map_api_node)
 
     g.add_node("qa_mode", qa_mode_node)
 
@@ -68,8 +71,16 @@ def build_graph():
     })
     # TODO: No need to make this conditional
     g.add_conditional_edges("explain_responses", route_from_explain_responses, {
-        "decision_interrupt": "decision_interrupt",
-    })
+                            "decision_interrupt": "decision_interrupt"})
+    # TODO: No need to make this conditional
+    g.add_conditional_edges("api_mapping_intro",
+                            route_from_api_mapping_intro, {})
+    # TODO: No need to make this conditional
+    g.add_conditional_edges("get_api_data_interrupt",
+                            route_from_get_api_data, {})
+    # TODO: No need to make this conditional
+    g.add_conditional_edges("process_and_map_api",
+                            route_from_process_and_map_api)
 
     g.add_conditional_edges("qa_mode", route_from_qa_mode)
 

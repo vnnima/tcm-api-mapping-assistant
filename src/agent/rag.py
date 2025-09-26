@@ -24,7 +24,7 @@ def _read_text(path: Path) -> Optional[str]:
 
 # TODO: Add support for PDF and Word
 # TODO: Add another build_index for the customer data
-def build_index(docs_dir: str, store_dir: Path = Config.INDEX_DIR):
+def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_DIR):
     root = Path(docs_dir)
     store_dir.mkdir(parents=True, exist_ok=True)
 
@@ -58,7 +58,7 @@ def build_index(docs_dir: str, store_dir: Path = Config.INDEX_DIR):
     print(f"Indexed {len(texts)} chunks → {store_dir}")
 
 
-def rag_search(query: str, k: int = 4, store_dir: Path = Config.INDEX_DIR) -> List[str]:
+def rag_search(query: str, k: int = 4, store_dir: Path = Config.KNOWLEDGE_BASE_DIR) -> List[str]:
     try:
         print(f"DEBUG RAG: Searching for '{query}' in {store_dir}")
         if not store_dir.exists():
