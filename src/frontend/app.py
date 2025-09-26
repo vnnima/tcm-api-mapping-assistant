@@ -7,6 +7,7 @@ This is a great starting point for learning how to build a full-stack AI applica
 """
 import json
 import streamlit as st
+from pathlib import Path
 from api import (
     get_assistants,
     create_thread,
@@ -56,8 +57,8 @@ def initialize_session_state(user_id: str):
 
     if "pending_interrupt" not in st.session_state:
         st.session_state.pending_interrupt = None
-    if "pending_prompt" not in st.session_state:
-        st.session_state.pending_prompt = None
+    if "pending_payload" not in st.session_state:
+        st.session_state.pending_payload = None
 
     if "is_resuming" not in st.session_state:
         st.session_state.is_resuming = False
@@ -114,7 +115,7 @@ def handle_resume_if_needed():
 
     # Clear interrupt BEFORE resuming so we don't gate the UI during the streaming pass
     st.session_state.pending_interrupt = None
-    st.session_state.pending_prompt = None
+    st.session_state.pending_payload = None
     st.session_state.is_resuming = False
     st.session_state.resume_payload = None
 
@@ -135,8 +136,7 @@ def handle_resume_if_needed():
                 val = (data or {}).get(
                     "value", {}) if isinstance(data, dict) else {}
                 st.session_state.pending_interrupt = data
-                st.session_state.pending_prompt = val.get(
-                    "prompt") if isinstance(val, dict) else None
+                st.session_state.pending_payload = val
                 st.rerun()
             elif kind == "done":
                 break
@@ -155,32 +155,81 @@ def render_interrupt_controls_if_pending() -> bool:
     if st.session_state.pending_interrupt is None:
         return False
 
-    prompt_text = st.session_state.pending_prompt or "Eingabe benötigt: Drücken sie `weiter` oder stellen sie eine Frage."
-    st.info(f"**Interrupt**\n\n{prompt_text}")
+    if not st.session_state.pending_payload:
+        st.error("Interrupt payload is missing or invalid.")
+        return False
 
-    col1, col2 = st.columns([1, 3])
+    if st.session_state.pending_payload['type'] == "get_api_data":
+        prompt_text = st.session_state.pending_payload[
+            'prompt'] or "Bitte geben Sie Ihren Systemnamen, Prozess und bestehenden API-Metadaten an (z.B. JSON-Schema, XML-Beispiel, CSV-Struktur, OpenAPI/Swagger Definition)."
+        st.info(f"**Interrupt**\n\n{prompt_text}")
 
-    def _resume_continue():
-        st.session_state.resume_payload = {"continue": True}
-        st.session_state.is_resuming = True
-        st.session_state.trigger_rerun = True
+        col = st.container()
 
-    with col1:
-        st.button("Weiter ▶️", key="interrupt_continue",
-                  on_click=_resume_continue)
+        def _resume_with_api_data():
+            system_name = st.session_state.get("system_name", "").strip()
+            process = st.session_state.get("process", "").strip()
+            api_metadata_file = st.session_state.get("api_metadata_file")
 
-    def _resume_question():
-        q = st.session_state.get("interrupt_question_text", "")
-        if q.strip():
-            st.session_state.resume_payload = {"question": q.strip()}
+            if not system_name or not process or not api_metadata_file:
+                st.error(
+                    "Bitte füllen Sie alle Felder aus und laden Sie eine Datei hoch.")
+                return
+
+            project_root = Path(__file__).resolve().parents[2]
+            api_data_dir = project_root / "api_data"
+            api_data_dir.mkdir(parents=True, exist_ok=True)
+
+            file_path = api_data_dir / api_metadata_file.name
+            with open(file_path, "wb") as f:
+                f.write(api_metadata_file.getvalue())
+
+            api_metadata = file_path
+            payload = {
+                "system_name": system_name,
+                "process": process,
+                "api_metadata": api_metadata.as_posix(),
+            }
+            st.session_state.resume_payload = payload
             st.session_state.is_resuming = True
             st.session_state.trigger_rerun = True
 
-    with col2:
-        st.text_input("Frage stellen:", key="interrupt_question_text")
-        st.button("Frage senden 💬", on_click=_resume_question)
+        with col:
+            st.text_input("Systemname:", key="system_name")
+            st.text_input("Prozess:", key="process")
+            st.file_uploader("Bestehende API-Metadaten hochladen:",
+                             type=["json", "xml", "csv", "yaml", "txt"], key="api_metadata_file")
+            st.button("Daten senden 💬", on_click=_resume_with_api_data)
 
-    return True
+        return True
+    else:
+        prompt_text = st.session_state.pending_payload[
+            'prompt'] or "Eingabe benötigt: Drücken sie `weiter` oder stellen sie eine Frage."
+        st.info(f"**Interrupt**\n\n{prompt_text}")
+
+        col1, col2 = st.columns([1, 3])
+
+        def _resume_continue():
+            st.session_state.resume_payload = {"continue": True}
+            st.session_state.is_resuming = True
+            st.session_state.trigger_rerun = True
+
+        with col1:
+            st.button("Weiter ▶️", key="interrupt_continue",
+                      on_click=_resume_continue)
+
+        def _resume_question():
+            q = st.session_state.get("interrupt_question_text", "")
+            if q.strip():
+                st.session_state.resume_payload = {"question": q.strip()}
+                st.session_state.is_resuming = True
+                st.session_state.trigger_rerun = True
+
+        with col2:
+            st.text_input("Frage stellen:", key="interrupt_question_text")
+            st.button("Frage senden 💬", on_click=_resume_question)
+
+        return True
 
 
 #################################
@@ -196,6 +245,7 @@ with st.sidebar:
         assistant)
 
     st.title("Conversations")
+    st.caption("A TCM chatbot to assist with API mapping.")
 
     if st.button("Create New Conversation"):
         create_new_thread(user_id=st.session_state.user_id)
@@ -297,8 +347,7 @@ if prompt and not interrupt_active:
                 val = (data or {}).get(
                     "value", {}) if isinstance(data, dict) else {}
                 st.session_state.pending_interrupt = data
-                st.session_state.pending_prompt = val.get(
-                    "prompt") if isinstance(val, dict) else None
+                st.session_state.pending_payload = val
                 st.rerun()
             elif kind == "done":
                 break
