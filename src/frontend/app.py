@@ -356,6 +356,3 @@ if prompt and not interrupt_active:
 
     # Rerun to load updated thread_state (messages appended by server)
     st.rerun()
-
-with st.expander("<DEBUG> Session State"):
-    st.write(st.session_state)

@@ -426,7 +426,7 @@ def route_from_general_screening_info(state: State) -> str:
 def decision_interrupt_node(state: State) -> dict:
     payload = interrupt({
         "type": "choice_or_question",
-        "prompt": "Schreibe `weiter` zum Fortfahren oder stelle deine Frage.",
+        "prompt": "Drücke `weiter` zum Fortfahren oder stelle deine Frage.",
     })
 
     decision, question = None, None
@@ -649,9 +649,14 @@ def process_and_map_api_node(state: State) -> dict:
     prov = state.get("provisioning", {})
     build_index(Config.API_DATA_DIR.as_posix(), Config.API_DATA_VECTOR_STORE)
 
-    snippets = rag_search(
+    api_data_snippets = rag_search(
         "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
         store_dir=Config.API_DATA_VECTOR_STORE,
+    )
+
+    docs_snippets = rag_search(
+        "REST API, screening, name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
+        store_dir=Config.KNOWLEDGE_BASE_DIR,
     )
 
     sys = SystemMessage(content=(
@@ -685,7 +690,9 @@ Analysiere die folgenden Kunden-API-Metadaten und erstelle ein detailliertes Map
 5. **Implementierungshinweise:** Gebe praktische Umsetzungstipps
 
 **Berücksichtige AEB API Dokumentation:**
-{snippets if snippets else '[Keine Dokumentation verfügbar]'}
+{docs_snippets if docs_snippets else '[Keine Dokumentation verfügbar]'}
+**Berücksichtige die API Metadaten des Kunden:**
+{api_data_snippets if api_data_snippets else '[Keine Daten verfügbar]'}
 
 Strukturiere deine Antwort klar und praxisorientiert mit JSON-Beispielen.
 """)
