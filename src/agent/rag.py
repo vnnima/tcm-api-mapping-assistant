@@ -10,6 +10,7 @@ from langchain_chroma import Chroma
 from agent.config import Config
 
 _BUILT = False
+ALLOWED_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 
 def _normalize_text(s: str) -> str:
@@ -98,7 +99,7 @@ def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_DIR):
     metas: List[Dict[str, Any]] = []
 
     for p in root.rglob("*"):
-        if not p.is_file() or p.suffix.lower() not in Config.ALLOWED_EXTS:
+        if not p.is_file() or p.suffix.lower() not in ALLOWED_EXTS:
             continue
 
         content = _read_text(p)

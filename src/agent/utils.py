@@ -2,12 +2,14 @@ import re
 from typing import Dict, Optional, Sequence, List
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
+from agent.state import ProvisioningState
+
 
 URL_RE = re.compile(r"https?://[^\s]+", re.I)
 
 
-def parse_endpoints(text: str) -> Dict[str, str]:
-    out: Dict[str, str] = {}
+def parse_endpoints(text: str) -> ProvisioningState:
+    out = ProvisioningState()
     if not text:
         return out
     urls = URL_RE.findall(text)
@@ -73,16 +75,16 @@ def parse_yes_no(text: str) -> Optional[bool]:
     return None
 
 
-def has_endpoint_information(prov: Dict[str, str]) -> bool:
+def has_endpoint_information(prov: ProvisioningState) -> bool:
     return any(prov.get(key) for key in ["test_endpoint", "prod_endpoint"])
 
 
-def format_endpoints_message(found: Dict[str, str]) -> List[str]:
+def format_endpoints_message(found: ProvisioningState) -> List[str]:
     lines = []
     if found.get("test_endpoint"):
-        lines.append(f"- Test: {found['test_endpoint']}")
+        lines.append(f"- Test: {found.get('test_endpoint', 'N/A')}")
     if found.get("prod_endpoint"):
-        lines.append(f"- Prod:  {found['prod_endpoint']}")
+        lines.append(f"- Prod:  {found.get('prod_endpoint', 'N/A')}")
     if len(lines) == 1:
         lines.append(
             "Hinweis: Den zweiten Endpoint (Test/Prod) können Sie später ergänzen.")

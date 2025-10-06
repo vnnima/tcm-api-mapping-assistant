@@ -9,86 +9,12 @@ import json
 import streamlit as st
 from pathlib import Path
 from api import (
-    get_assistants,
-    create_thread,
-    search_threads,
     get_thread_state,
-    delete_thread,
     run_thread_events,
 )
-
-#################################
-# Session State Management
-#################################
-
-
-def initialize_session_state(user_id: str):
-    """
-    Initialize the session state with the user ID and other data we need to manage the chat app.
-    """
-
-    if "user_id" not in st.session_state:
-        st.session_state.user_id = user_id
-
-    if "assistants" not in st.session_state:
-        assistants_list = get_assistants()
-        st.session_state.assistants = {
-            a["name"]: a["assistant_id"] for a in assistants_list
-        }
-
-    if "active_assistant_id" not in st.session_state:
-        assistant_ids = list(st.session_state.assistants.values())
-        st.session_state.active_assistant_id = assistant_ids[0] if assistant_ids else None
-
-    if "thread_ids" not in st.session_state:
-        st.session_state.thread_ids = []
-        threads = search_threads(st.session_state.user_id)
-        for thread in threads:
-            st.session_state.thread_ids.append(thread["thread_id"])
-
-    if "selected_thread_id" not in st.session_state:
-        if st.session_state.thread_ids:
-            st.session_state.selected_thread_id = st.session_state.thread_ids[-1]
-        else:
-            st.session_state.selected_thread_id = None
-
-    if "thread_state" not in st.session_state:
-        st.session_state.thread_state = {}
-
-    if "pending_interrupt" not in st.session_state:
-        st.session_state.pending_interrupt = None
-    if "pending_payload" not in st.session_state:
-        st.session_state.pending_payload = None
-
-    if "is_resuming" not in st.session_state:
-        st.session_state.is_resuming = False
-    if "resume_payload" not in st.session_state:
-        st.session_state.resume_payload = None
-
-    # Generic rerun trigger for callbacks (avoid calling st.rerun() inside them)
-    if "trigger_rerun" not in st.session_state:
-        st.session_state.trigger_rerun = False
-
-
-def create_new_thread(user_id: str):
-    thread = create_thread(user_id)
-    st.session_state.thread_ids.append(thread["thread_id"])
-    st.session_state.thread_state = get_thread_state(thread["thread_id"])
-    st.session_state.selected_thread_id = thread["thread_id"]
-    st.session_state.trigger_rerun = True
-
-
-def delete_thread_and_update_state(thread_id: str):
-    delete_thread(thread_id)
-    if thread_id in st.session_state.thread_ids:
-        st.session_state.thread_ids.remove(thread_id)
-    st.session_state.thread_state = {}
-    # If we deleted the selected thread, pick a new one
-    if st.session_state.thread_ids:
-        st.session_state.selected_thread_id = st.session_state.thread_ids[-1]
-    else:
-        st.session_state.selected_thread_id = None
-    st.session_state.trigger_rerun = True
+from utils import render_initial_message
+from sidebar import render_sidebar
+from state import initialize_session_state
 
 
 initialize_session_state(user_id="valdrin")
@@ -232,64 +158,16 @@ def render_interrupt_controls_if_pending() -> bool:
         return True
 
 
-#################################
-# Sidebar
-#################################
-
 with st.sidebar:
-    st.write("User ID: " + st.session_state.user_id)
-
-    assistant = st.selectbox("Select Assistant", list(
-        st.session_state.assistants.keys()))
-    st.session_state.active_assistant_id = st.session_state.assistants.get(
-        assistant)
-
-    st.title("Conversations")
-    st.caption("A TCM chatbot to assist with API mapping.")
-
-    if st.button("Create New Conversation"):
-        create_new_thread(user_id=st.session_state.user_id)
-
-    if st.session_state.thread_ids:
-        def _on_select_thread():
-            st.session_state.thread_state = get_thread_state(
-                st.session_state.selected_thread_id)
-
-        # Ensure selected thread exists
-        if (
-            "selected_thread_id" not in st.session_state
-            or st.session_state.selected_thread_id not in st.session_state.thread_ids
-        ):
-            # Use latest thread (last in list)
-            st.session_state.selected_thread_id = st.session_state.thread_ids[-1]
-
-        st.radio(
-            "Select Conversation",
-            options=st.session_state.thread_ids,
-            format_func=lambda tid: tid[:8],
-            key="selected_thread_id",
-            on_change=_on_select_thread,
-        )
-
-    if st.button("Delete Conversation", type="primary"):
-        if st.session_state.selected_thread_id:
-            delete_thread_and_update_state(st.session_state.selected_thread_id)
+    render_sidebar()
 
 
-#################################
-# Main Chat Area
-#################################
-
-st.title(f"Chatting with {assistant}")
+st.title(st.session_state.active_assistant)
 
 # 1) If we’re resuming, do it first (streams assistant + may set a new interrupt)
 handle_resume_if_needed()
 
-with st.chat_message("assistant"):
-    st.markdown("Hallo! Ich bin dein **AEB API Mapping Assistant**. "
-                "Ich helfe dir dabei, die **TCM Screening API** sauber in dein System zu integrieren.\n\n"
-                "Möchtest du mit der Integration beginnen? (Ja/Nein)"
-                )
+render_initial_message(st.session_state.active_assistant)
 
 # 2) Always load latest thread state and render full history (so it never “disappears”)
 if st.session_state.selected_thread_id and st.session_state.selected_thread_id in st.session_state.thread_ids:
@@ -325,7 +203,9 @@ prompt = st.chat_input("Send a message...", disabled=chat_disabled)
 
 if prompt and not interrupt_active:
     # Show user message immediately
+    print(prompt)
     with st.chat_message("user"):
+        print("This should be printed")
         st.markdown(prompt)
 
     # Stream assistant response and capture interrupts

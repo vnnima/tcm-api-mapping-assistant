@@ -1,42 +1,39 @@
 from __future__ import annotations
-
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph, START, END
-from langchain_core.runnables import RunnableConfig
-from langgraph.graph.message import add_messages
+from .state import ApiMappingState
 from langgraph.types import interrupt
-from typing import Dict, List, Any, TypedDict, Annotated, Sequence
-
-from agent.rag import rag_search, build_index
+from langgraph.graph.message import add_messages
+from langchain_core.runnables import RunnableConfig
+from langgraph.graph import END
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from enum import Enum
 from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
                          parse_wsm_user, parse_yes_no, has_endpoint_information,
                          get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
+from agent.llm import get_llm
 from agent.config import Config
+from agent.rag import rag_search, build_index
 
 
-llm = ChatOpenAI(model=Config.OPENAI_MODEL, temperature=0)
+class NodeNames(str, Enum):
+    INTRO = "intro"
+    CLARIFY = "clarify"
+    ASK_ENDPOINTS = "ask_endpoints"
+    ASK_CLIENT = "ask_client"
+    ASK_WSM = "ask_wsm"
+    GENERAL_SCREENING_INFO = "general_screening_info"
+    EXPLAIN_SCREENING_VARIANTS = "explain_screening_variants"
+    EXPLAIN_RESPONSES = "explain_responses"
+    API_MAPPING_INTRO = "api_mapping_intro"
+    DECISION_INTERRUPT = "decision_interrupt"
+    GET_API_DATA_INTERRUPT = "get_api_data_interrupt"
+    PROCESS_AND_MAP_API = "process_and_map_api"
+    QA_MODE = "qa_mode"
 
 
-class State(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-    provisioning: Dict[str, Any]
-
-    decision: str | None  # continue or qa
-    pending_question: str | None  # the user's question to feed into qa_mode
-    next_node_after_qa: str
-
-    # API Mapping Stuff
-    system_name: str | None
-    process: str | None
-    api_metadata: str | None
-
-    started: bool
-    completed: bool
-    rag_snippets: List[str]
+llm = get_llm()
 
 
-def intro_node(state: State) -> dict:
+def intro_node(state: ApiMappingState) -> dict:
     if state.get("completed", False):
         return {}
 
@@ -79,12 +76,12 @@ def intro_node(state: State) -> dict:
         }
 
 
-def route_from_intro(state: State) -> str:
+def route_from_intro(state: ApiMappingState) -> str:
     """Route from intro based on user response and current state."""
 
     # TODO: Can remove this when I implement the looping in qa_mode with interrupt
     if state.get("completed", False):
-        return "qa_mode"
+        return NodeNames.QA_MODE
 
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
@@ -96,30 +93,30 @@ def route_from_intro(state: State) -> str:
         prov = state.get("provisioning", {})
 
         if not has_endpoint_information(prov):
-            return "ask_endpoints"
+            return NodeNames.ASK_ENDPOINTS
 
         if not prov.get("clientIdentCode"):
-            return "ask_client"
+            return NodeNames.ASK_CLIENT
 
         if "wsm_user_configured" not in prov:
-            return "ask_wsm"
+            return NodeNames.ASK_WSM
 
         # All good -> guide
-        return "general_screening_info"
+        return NodeNames.GENERAL_SCREENING_INFO
 
     # If user hasn't started yet, check their yes/no response
     yn = parse_yes_no(user_input or "")
 
     if yn is None:
-        return "clarify"
+        return NodeNames.CLARIFY
     elif yn is False:
         # TODO: Add a node where we explain where to get this info from.
         return END
     else:
-        return "ask_endpoints"
+        return NodeNames.ASK_ENDPOINTS
 
 
-def clarify_node(state: State) -> dict:
+def clarify_node(state: ApiMappingState) -> dict:
     """Generic clarify node that looks at the last question and user's response to provide help."""
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
@@ -152,7 +149,7 @@ Bleibe kurz, hilfreich und freundlich.
     return {"messages": [resp]}
 
 
-def route_from_clarify(state: State) -> str:
+def route_from_clarify(state: ApiMappingState) -> str:
     """Route from clarify node - after clarification, route back to appropriate node."""
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
@@ -161,16 +158,16 @@ def route_from_clarify(state: State) -> str:
     if not user_input:
         return END
     if not has_endpoint_information(prov):
-        return "ask_endpoints"
+        return NodeNames.ASK_ENDPOINTS
     if not prov.get("clientIdentCode"):
-        return "ask_client"
+        return NodeNames.ASK_CLIENT
     if "wsm_user_configured" not in prov:
-        return "ask_wsm"
+        return NodeNames.ASK_WSM
     else:
-        return "intro"
+        return NodeNames.INTRO
 
 
-def ask_endpoints_node(state: State) -> dict:
+def ask_endpoints_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
 
@@ -194,7 +191,7 @@ def ask_endpoints_node(state: State) -> dict:
     # If exactly one URL and no prior endpoints, accept as test by default
     single = URL_RE.findall(user_input)
     if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
-        found_endpoints = {"test_endpoint": single[0]}
+        found_endpoints["test_endpoint"] = single[0]
 
     # If user provided input but parsing failed, route to clarify
     if not has_endpoint_information(prov) and not found_endpoints:
@@ -216,7 +213,7 @@ def ask_endpoints_node(state: State) -> dict:
             ]
         }
 
-    prov.update(found_endpoints)
+    prov = {**prov, **found_endpoints}
 
     lines = format_endpoints_message(found_endpoints)
 
@@ -229,22 +226,22 @@ def ask_endpoints_node(state: State) -> dict:
     }
 
 
-def route_from_endpoints(state: State) -> str:
+def route_from_endpoints(state: ApiMappingState) -> str:
     """Route from endpoints based on current provisioning state."""
     prov = state.get("provisioning", {})
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
 
     if user_input.strip() and not has_endpoint_information(prov):
-        return "clarify"
+        return NodeNames.CLARIFY
 
     if not has_endpoint_information(prov):
         return END
 
-    return "ask_client"
+    return NodeNames.ASK_CLIENT
 
 
-def ask_client_node(state: State) -> dict:
+def ask_client_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
     prov = state.get("provisioning", {})
@@ -283,27 +280,27 @@ def ask_client_node(state: State) -> dict:
         "provisioning": prov,
         "messages": confirmation_msgs + [
             AIMessage(
-                content=f"Danke! Mandant erfasst: clientIdentCode={prov['clientIdentCode']}")
+                content=f"Danke! Mandant erfasst: clientIdentCode={prov.get('clientIdentCode', 'N/A')}")
         ]
     }
 
 
-def route_from_client(state: State) -> str:
+def route_from_client(state: ApiMappingState) -> str:
     """Route from client based on current provisioning state."""
     prov = state.get("provisioning", {})
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
 
     if user_input.strip() and not prov.get("clientIdentCode"):
-        return "clarify"
+        return NodeNames.CLARIFY
 
     if not prov.get("clientIdentCode"):
         return END
 
-    return "ask_wsm"
+    return NodeNames.ASK_WSM
 
 
-def ask_wsm_node(state: State) -> dict:
+def ask_wsm_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
     prov = state.get("provisioning", {})
@@ -325,7 +322,7 @@ def ask_wsm_node(state: State) -> dict:
             ]
         }
 
-    yn = "Ja" if prov["wsm_user_configured"] else "Nein"
+    yn = "Ja" if prov.get("wsm_user_configured") else "Nein"
     return {
         "provisioning": prov,
         "messages": [
@@ -334,22 +331,22 @@ def ask_wsm_node(state: State) -> dict:
     }
 
 
-def route_from_wsm(state: State) -> str:
+def route_from_wsm(state: ApiMappingState) -> str:
     """Route from WSM based on current provisioning state."""
     prov = state.get("provisioning", {})
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
 
     if user_input.strip() and not prov.get("wsm_user_configured"):
-        return "clarify"
+        return NodeNames.CLARIFY
 
     if not prov.get("wsm_user_configured"):
         return END
 
-    return "general_screening_info"
+    return NodeNames.GENERAL_SCREENING_INFO
 
 
-def general_screening_info_node(state: State) -> dict:
+def general_screening_info_node(state: ApiMappingState) -> dict:
     prov = state.get("provisioning", {})
     response_content = f"""
 ### Anleitung zur Erst-Integration der Sanktionslistenprüfung
@@ -415,15 +412,11 @@ def general_screening_info_node(state: State) -> dict:
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": "explain_screening_variants",
+        "next_node_after_qa": NodeNames.EXPLAIN_SCREENING_VARIANTS,
     }
 
 
-def route_from_general_screening_info(state: State) -> str:
-    return "decision_interrupt"
-
-
-def decision_interrupt_node(state: State) -> dict:
+def decision_interrupt_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "choice_or_question",
         "prompt": "Drücke `weiter` zum Fortfahren oder stelle deine Frage.",
@@ -450,13 +443,13 @@ def decision_interrupt_node(state: State) -> dict:
     return out
 
 
-def route_from_decision_interrupt(state: State) -> str:
+def route_from_decision_interrupt(state: ApiMappingState) -> str:
     if state.get("decision") == "continue":
-        return state.get("next_node_after_qa", "explain_screening_variants")
-    return "qa_mode"
+        return state.get("next_node_after_qa", NodeNames.EXPLAIN_SCREENING_VARIANTS)
+    return NodeNames.QA_MODE
 
 
-def explain_screening_variants_node(state: State) -> dict:
+def explain_screening_variants_node(state: ApiMappingState) -> dict:
     """Explain the three screening variants for API integration."""
     response_content = """
 ## Drei Varianten für die Sanktionslistenprüfung per API
@@ -507,15 +500,11 @@ def explain_screening_variants_node(state: State) -> dict:
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": "explain_responses",
+        "next_node_after_qa": NodeNames.EXPLAIN_RESPONSES,
     }
 
 
-def route_from_explain_screening_variants(state: State) -> str:
-    return "decision_interrupt"
-
-
-def explain_responses_node(state: State) -> dict:
+def explain_responses_node(state: ApiMappingState) -> dict:
     """Explain the different response scenarios from the screening API."""
     response_content = """
 ## API Response-Szenarien und Systemreaktionen
@@ -567,15 +556,11 @@ Die Sanktionslistenprüfung liefert verschiedene Response-Kombinationen, die unt
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": "api_mapping_intro",
+        "next_node_after_qa": NodeNames.API_MAPPING_INTRO,
     }
 
 
-def route_from_explain_responses(state: State) -> str:
-    return "decision_interrupt"
-
-
-def api_mapping_intro_node(state: State) -> dict:
+def api_mapping_intro_node(state: ApiMappingState) -> dict:
     """Introduce the API mapping service and gather initial system information."""
     response_content = """
 ## 🔄 API Mapping Service
@@ -601,16 +586,11 @@ Wir benötigen Ihre bestehende API-Struktur in einem der folgenden Formate:
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": "process_and_map_api",
+        "next_node_after_qa": NodeNames.PROCESS_AND_MAP_API,
     }
 
 
-def route_from_api_mapping_intro(state: State) -> str:
-    """Route from API mapping intro - check if system info provided."""
-    return "get_api_data_interrupt"
-
-
-def get_api_data_interrupt_node(state: State) -> dict:
+def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "get_api_data",
         "prompt": "Bitte geben Sie Ihren Systemnamen, Prozess und bestehenden API-Metadaten an (z.B. JSON-Schema, XML-Beispiel, CSV-Struktur, OpenAPI/Swagger Definition).",
@@ -638,11 +618,7 @@ def get_api_data_interrupt_node(state: State) -> dict:
     return out
 
 
-def route_from_get_api_data(state: State) -> str:
-    return "process_and_map_api"
-
-
-def process_and_map_api_node(state: State) -> dict:
+def process_and_map_api_node(state: ApiMappingState) -> dict:
     """Process customer API metadata and generate mapping suggestions."""
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
@@ -704,12 +680,7 @@ Strukturiere deine Antwort klar und praxisorientiert mit JSON-Beispielen.
     }
 
 
-def route_from_process_and_map_api(state: State) -> str:
-    """Route from API processing - check if user wants clarifications."""
-    return "decision_interrupt"
-
-
-def qa_mode_node(state: State) -> dict:
+def qa_mode_node(state: ApiMappingState) -> dict:
     """Handle free-flowing Q&A after the initial flow is completed."""
     prov = state.get("provisioning", {})
     question = (state.get("pending_question") or "").strip()
@@ -738,12 +709,14 @@ def qa_mode_node(state: State) -> dict:
 
     context_info = []
     if prov.get("test_endpoint"):
-        context_info.append(f"Test-Endpoint: {prov['test_endpoint']}")
+        context_info.append(
+            f"Test-Endpoint: {prov.get('test_endpoint', 'N/A')}")
     if prov.get("prod_endpoint"):
-        context_info.append(f"Prod-Endpoint: {prov['prod_endpoint']}")
+        context_info.append(
+            f"Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')}")
     if prov.get("clientIdentCode"):
         context_info.append(
-            f"Mandant (clientIdentCode): {prov['clientIdentCode']}")
+            f"Mandant (clientIdentCode): {prov.get('clientIdentCode', 'N/A')}")
     if "wsm_user_configured" in prov:
         wsm_status = "Ja" if prov["wsm_user_configured"] else "Nein"
         context_info.append(f"WSM-Benutzer: {wsm_status}")
@@ -789,8 +762,8 @@ WICHTIG: Nutze die Dokumentationsauszüge als primäre Quelle und verwende die k
     }
 
 
-def route_from_qa_mode(state: State, config: RunnableConfig) -> str:
+def route_from_qa_mode(state: ApiMappingState, config: RunnableConfig) -> str:
     decision = state.get("decision")
     if decision == "continue":
         return state.get("next_node_after_qa")
-    return "qa_mode"
+    return NodeNames.QA_MODE
