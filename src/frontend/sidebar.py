@@ -3,31 +3,25 @@ from api import get_thread_state, create_thread, delete_thread
 
 
 def render_sidebar():
-    global flag
-    st.write("User ID: " + st.session_state.user_id)
-
-    # Track previous assistant to detect changes
-    previous_assistant = st.session_state.get("previous_assistant", None)
-
     assistant = st.selectbox("Select Assistant", sorted(list(
         st.session_state.assistants.keys())))
+
+    previous_assistant = st.session_state.get("active_assistant")
+    assistant_changed = previous_assistant is not None and previous_assistant != assistant
+
     st.session_state.active_assistant = assistant
 
-    # Check if assistant changed
-    if previous_assistant != assistant and previous_assistant is not None:
-        # Assistant changed - clear current conversation, interrupts, and create new thread
+    st.session_state.active_assistant_id = st.session_state.assistants.get(
+        assistant)
+
+    if assistant_changed:
         st.session_state.thread_state = {}
+        st.session_state.selected_thread_id = None
+        # Clear any pending interrupts when switching assistants
         st.session_state.pending_interrupt = None
         st.session_state.pending_payload = None
         st.session_state.is_resuming = False
         st.session_state.resume_payload = None
-        _create_new_thread(user_id=st.session_state.user_id)
-        st.session_state.trigger_rerun = True
-
-    # Update the active assistant and track the previous one
-    st.session_state.active_assistant_id = st.session_state.assistants.get(
-        assistant)
-    st.session_state.previous_assistant = assistant
 
     st.title("Conversations")
     st.caption("A TCM chatbot to assist with API mapping.")
@@ -64,27 +58,23 @@ def render_sidebar():
 
 def format_thread_name(thread_id: str) -> str:
     """Format thread name for display in conversation selector."""
-    # Find the thread object in our stored threads
     thread = next(
         (t for t in st.session_state.threads if t["thread_id"] == thread_id), None)
 
     if thread:
-        # Try to use creation time if available
         if "created_at" in thread:
             try:
                 import datetime
-                # Assume created_at is an ISO string or timestamp
                 if isinstance(thread["created_at"], str):
                     dt = datetime.datetime.fromisoformat(
                         thread["created_at"].replace("Z", "+00:00"))
                 else:
                     dt = datetime.datetime.fromtimestamp(thread["created_at"])
-                date_str = dt.strftime("%m/%d %H:%M")
+                date_str = dt.strftime("%Y-%m-%d %H:%M")
                 return f"{date_str} ({thread_id[:8]})"
             except (ValueError, TypeError, KeyError):
                 pass
 
-        # Try to use thread metadata for a better name
         if "metadata" in thread and thread["metadata"]:
             metadata = thread["metadata"]
             if "title" in metadata:
@@ -92,7 +82,6 @@ def format_thread_name(thread_id: str) -> str:
             if "name" in metadata:
                 return f"{metadata['name']} ({thread_id[:8]})"
 
-    # Fallback to just the short ID
     return thread_id[:8]
 
 
@@ -114,7 +103,6 @@ def _delete_thread_and_update_state(thread_id: str):
     delete_thread(thread_id)
     if thread_id in st.session_state.thread_ids:
         st.session_state.thread_ids.remove(thread_id)
-    # Also remove from threads list
     st.session_state.threads = [
         t for t in st.session_state.threads if t["thread_id"] != thread_id]
     st.session_state.thread_state = {}

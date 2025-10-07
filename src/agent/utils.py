@@ -40,6 +40,7 @@ def parse_client_ident(text: str) -> Optional[str]:
     m = re.search(r"mandant(?:enname)?\s*[:=]\s*([A-Za-z0-9_\-]+)", text, re.I)
     if m:
         return m.group(1)
+    # TODO: Add correct validation for client ident code
     tokens = re.findall(r"\b[A-Z0-9_]{3,12}\b", text)
     return tokens[0] if tokens else None
 

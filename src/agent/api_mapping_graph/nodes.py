@@ -121,7 +121,8 @@ def clarify_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
 
-    last_question = get_last_assistant_message(messages)
+    last_question = get_last_assistant_message(
+        messages) or "Möchtest du mit der API Mapping Integration beginnen? (Ja/Nein)"
     if not last_question:
         last_question = "eine Frage"
 
@@ -597,7 +598,6 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
     })
 
     system_name, process, api_metadata = None, None, None
-    print(payload)
     if isinstance(payload, dict):
         if payload.get("system_name"):
             system_name = str(payload["system_name"]).strip()

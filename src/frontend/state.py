@@ -20,10 +20,9 @@ def initialize_session_state(user_id: str):
         assistant_ids = list(st.session_state.assistants.values())
         st.session_state.active_assistant_id = assistant_ids[0] if assistant_ids else None
 
-    if "previous_assistant" not in st.session_state:
-        # Initialize with the current assistant name to avoid triggering change on first load
+    if "active_assistant" not in st.session_state:
         assistant_names = list(st.session_state.assistants.keys())
-        st.session_state.previous_assistant = assistant_names[0] if assistant_names else None
+        st.session_state.active_assistant = assistant_names[0] if assistant_names else None
 
     if "threads" not in st.session_state:
         st.session_state.threads = []

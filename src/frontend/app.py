@@ -25,10 +25,6 @@ if st.session_state.get("trigger_rerun", False):
     st.rerun()
 
 
-#################################
-# Interrupt Handling
-#################################
-
 def handle_resume_if_needed():
     """
     If a resume is in progress, perform it (using Command(resume=...)),
@@ -164,18 +160,30 @@ with st.sidebar:
 
 st.title(st.session_state.active_assistant)
 
-# 1) If we’re resuming, do it first (streams assistant + may set a new interrupt)
 handle_resume_if_needed()
 
 render_initial_message(st.session_state.active_assistant)
 
-# 2) Always load latest thread state and render full history (so it never “disappears”)
-if st.session_state.selected_thread_id and st.session_state.selected_thread_id in st.session_state.thread_ids:
+# Load latest thread state
+if (st.session_state.selected_thread_id and
+        st.session_state.selected_thread_id in st.session_state.thread_ids):
     st.session_state.thread_state = get_thread_state(
         st.session_state.selected_thread_id)
+else:
+    # Clear thread state if no valid thread is selected
+    st.session_state.thread_state = {}
 
-if st.session_state.thread_state:
-    for message in st.session_state.thread_state["values"].get("messages", []):
+if ts := st.session_state.thread_state:
+    messages = []
+    if "values" in ts and isinstance(ts["values"], dict):
+        messages = ts["values"].get("messages", [])
+    elif "values" in ts and isinstance(ts["values"], list):
+        for item in ts["values"]:
+            if isinstance(item, dict) and "messages" in item:
+                messages = item["messages"]
+                break
+
+    for message in messages:
         if message.get("type") == "tool":
             with st.expander(f"🛠️ {message.get('name', 'tool')} < RESULTS > "):
                 try:
@@ -194,18 +202,14 @@ if st.session_state.thread_state:
 else:
     st.write("Create a new conversation to start chatting...")
 
-# 3) If an interrupt is pending, show the controls *below the history*.
 interrupt_active = render_interrupt_controls_if_pending()
 
-# 4) Normal chat input is disabled while an interrupt is active
+# User should not input text in chat when there is an interrupt
 chat_disabled = interrupt_active
 prompt = st.chat_input("Send a message...", disabled=chat_disabled)
 
 if prompt and not interrupt_active:
-    # Show user message immediately
-    print(prompt)
     with st.chat_message("user"):
-        print("This should be printed")
         st.markdown(prompt)
 
     # Stream assistant response and capture interrupts
@@ -215,9 +219,8 @@ if prompt and not interrupt_active:
         for kind, data in run_thread_events(
             st.session_state.active_assistant_id,
             st.session_state.selected_thread_id,
-            # FIRST call in a turn uses input=...
             initial_input={"messages": [prompt]},
-            resume_payload=None,                   # ...not a resume command
+            resume_payload=None,
         ):
             if kind == "ai_chunk":
                 buffer += data or ""
@@ -234,5 +237,4 @@ if prompt and not interrupt_active:
             else:
                 pass
 
-    # Rerun to load updated thread_state (messages appended by server)
     st.rerun()
