@@ -7,7 +7,8 @@ class Config:
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
     OPENAI_EMBEDDINGS_MODEL = os.getenv(
         "OPENAI_EMBEDDINGS_MODEL", "text-embedding-3-small")
-    KNOWLEDGE_BASE_DIR = Path("./vectorstore_min")
+    KNOWLEDGE_BASE_DIR = Path("./knowledge_base")  # Source files
+    KNOWLEDGE_BASE_VECTOR_STORE = Path("./vectorstore_min")  # Vector store location
     API_DATA_DIR = Path("./api_data")
     API_DATA_VECTOR_STORE = Path("./api_data_vectorstore")
     ENDPOINTS_HELP_URL = os.getenv(

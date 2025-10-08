@@ -39,7 +39,7 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
         return {}
 
     ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
-                       Config.KNOWLEDGE_BASE_DIR)
+                       Config.KNOWLEDGE_BASE_VECTOR_STORE)
 
     # TODO: Get error codes documentation via RAG search when available
     try:

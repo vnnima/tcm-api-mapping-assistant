@@ -64,7 +64,7 @@ def answer_question_node(state: DocumentationQnaState) -> Dict[str, Any]:
         }
 
     ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
-                       Config.KNOWLEDGE_BASE_DIR)
+                       Config.KNOWLEDGE_BASE_VECTOR_STORE)
 
     # Perform RAG search on the knowledge base
     try:
