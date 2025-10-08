@@ -9,7 +9,6 @@ from langchain_chroma import Chroma
 
 from agent.config import Config
 
-_BUILT = False
 ALLOWED_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 
@@ -82,18 +81,31 @@ def _dedup_texts(texts: List[str]) -> List[str]:
     return out
 
 
+def _index_exists(store_dir: Path) -> bool:
+    """Check if a Chroma index already exists in the store directory."""
+    try:
+        if not store_dir.exists():
+            return False
+        
+        # Check if there are any files that suggest a Chroma store exists
+        chroma_files = list(store_dir.glob("*"))
+        return len(chroma_files) > 0
+    except Exception:
+        return False
+
+
 def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_DIR):
     """
     Build a Chroma store from files in `docs_dir`, using a splitter chosen by file ending.
-    Safe to call multiple times per *process* thanks to _BUILT, to avoid duplicates.
+    Checks if index already exists to avoid rebuilding unnecessarily.
     """
-    global _BUILT
-    if _BUILT:
-        print("Index already built in this session, skipping.")
-        return
-
     root = Path(docs_dir)
     store_dir.mkdir(parents=True, exist_ok=True)
+
+    # Check if index already exists
+    if _index_exists(store_dir):
+        print(f"Index already exists at {store_dir}, skipping build.")
+        return
 
     texts: List[str] = []
     metas: List[Dict[str, Any]] = []
@@ -137,7 +149,18 @@ def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_DIR):
     vs.add_texts(texts=texts, metadatas=metas, ids=ids)
 
     print(f"Indexed {len(texts)} chunks → {store_dir}")
-    _BUILT = True
+
+
+def ensure_index_built(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_DIR):
+    """
+    Ensure that the index is built for the given docs directory.
+    This is a convenience function that can be called before any RAG search.
+    """
+    if not _index_exists(store_dir):
+        print(f"Building index for {docs_dir}...")
+        build_index(docs_dir, store_dir)
+    else:
+        print(f"Index already exists at {store_dir}")
 
 
 def rag_search(
@@ -150,12 +173,19 @@ def rag_search(
 ) -> List[str]:
     """
     MMR retrieval to reduce duplicate results. Falls back to similarity if mmr=False.
+    Ensures index exists before searching.
     """
     try:
         print(f"DEBUG RAG: Searching for '{query}' in {store_dir}")
+        
+        if not _index_exists(store_dir):
+            print(f"DEBUG RAG: Index not found at {store_dir}, building it now...")
+            # Try to build from knowledge base or docs directory
+            docs_dir = Config.KNOWLEDGE_BASE_DIR.as_posix() if store_dir == Config.KNOWLEDGE_BASE_DIR else Config.API_DATA_DIR.as_posix()
+            build_index(docs_dir, store_dir)
+        
         if not store_dir.exists():
-            print(
-                f"DEBUG RAG: Vector store directory {store_dir} does not exist")
+            print(f"DEBUG RAG: Vector store directory {store_dir} does not exist")
             return []
 
         vs = Chroma(persist_directory=str(store_dir),

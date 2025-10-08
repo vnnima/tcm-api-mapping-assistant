@@ -11,7 +11,7 @@ from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
                          get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
 from agent.llm import get_llm
 from agent.config import Config
-from agent.rag import rag_search, build_index
+from agent.rag import rag_search, build_index, ensure_index_built
 
 
 class NodeNames(str, Enum):
@@ -623,7 +623,9 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
     prov = state.get("provisioning", {})
-    build_index(Config.API_DATA_DIR.as_posix(), Config.API_DATA_VECTOR_STORE)
+    
+    ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(), Config.KNOWLEDGE_BASE_DIR)
+    ensure_index_built(Config.API_DATA_DIR.as_posix(), Config.API_DATA_VECTOR_STORE)
 
     api_data_snippets = rag_search(
         "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
@@ -705,6 +707,8 @@ def qa_mode_node(state: ApiMappingState) -> dict:
     if not question:
         return {"decision": "qa"}
 
+    ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(), Config.KNOWLEDGE_BASE_DIR)
+    
     snippets = rag_search(f"Question about Screening API: {question}", k=5)
 
     context_info = []

@@ -1,12 +1,13 @@
 from __future__ import annotations
 from agent.documentation_qna_graph.tools import get_tcm_api_documentation_url
 from agent.utils import get_latest_user_message
-from agent.rag import rag_search
+from agent.rag import rag_search, ensure_index_built
 from agent.llm import get_llm
 from .state import DocumentationQnaState, QnaNodeNames
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import END
+from agent.config import Config
 
 
 llm = get_llm().bind_tools([get_tcm_api_documentation_url])
@@ -61,6 +62,9 @@ def answer_question_node(state: DocumentationQnaState) -> Dict[str, Any]:
                     content="Bitte stellen Sie eine Frage zur AEB TCM Screening API Dokumentation.")
             ]
         }
+
+    ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                       Config.KNOWLEDGE_BASE_DIR)
 
     # Perform RAG search on the knowledge base
     try:

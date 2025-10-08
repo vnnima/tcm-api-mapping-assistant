@@ -1,11 +1,12 @@
 from __future__ import annotations
 from agent.utils import get_latest_user_message
-from agent.rag import rag_search
+from agent.rag import rag_search, ensure_index_built
 from agent.llm import get_llm
 from .state import ErrorDetectionState
 from typing import Dict, Any
 from langgraph.graph import END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
+from agent.config import Config
 
 
 llm = get_llm()
@@ -36,6 +37,9 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
 
     if not user_input or not user_input.strip():
         return {}
+
+    ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                       Config.KNOWLEDGE_BASE_DIR)
 
     # TODO: Get error codes documentation via RAG search when available
     try:
