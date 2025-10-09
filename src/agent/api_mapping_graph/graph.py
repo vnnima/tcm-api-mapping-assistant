@@ -82,7 +82,13 @@ def build_graph():
         "__end__": END
     })
     g.add_conditional_edges(NodeNames.DECISION_INTERRUPT,
-                            route_from_decision_interrupt)
+                            route_from_decision_interrupt, {
+                                NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,
+                                NodeNames.EXPLAIN_RESPONSES: NodeNames.EXPLAIN_RESPONSES,
+                                NodeNames.API_MAPPING_INTRO: NodeNames.API_MAPPING_INTRO,
+                                NodeNames.PROCESS_AND_MAP_API: NodeNames.PROCESS_AND_MAP_API,
+                                NodeNames.QA_MODE: NodeNames.QA_MODE,
+                            })
 
     g.add_edge(NodeNames.GENERAL_SCREENING_INFO, NodeNames.DECISION_INTERRUPT)
     g.add_edge(NodeNames.EXPLAIN_SCREENING_VARIANTS,
@@ -92,7 +98,13 @@ def build_graph():
     g.add_edge(NodeNames.GET_API_DATA_INTERRUPT, NodeNames.PROCESS_AND_MAP_API)
     g.add_edge(NodeNames.PROCESS_AND_MAP_API, NodeNames.DECISION_INTERRUPT)
 
-    g.add_conditional_edges(NodeNames.QA_MODE, route_from_qa_mode)
+    g.add_conditional_edges(NodeNames.QA_MODE, route_from_qa_mode, {
+        NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,
+        NodeNames.EXPLAIN_RESPONSES: NodeNames.EXPLAIN_RESPONSES,
+        NodeNames.API_MAPPING_INTRO: NodeNames.API_MAPPING_INTRO,
+        NodeNames.PROCESS_AND_MAP_API: NodeNames.PROCESS_AND_MAP_API,
+        NodeNames.QA_MODE: NodeNames.QA_MODE,
+    })
 
     # return g.compile(checkpointer=checkpointer) # TODO: Don't need this with Langgraph API
     return g.compile()
