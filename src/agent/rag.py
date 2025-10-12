@@ -165,6 +165,113 @@ def debug_knowledge_base_files(docs_dir: str):
     print(f"=== END FILES DEBUG ===\n")
 
 
+def clear_vectorstore(store_dir: Path):
+    """Clear/delete an existing vectorstore to start fresh."""
+    try:
+        if store_dir.exists():
+            import shutil
+            print(f"Clearing vectorstore at {store_dir}")
+            shutil.rmtree(store_dir)
+            print(f"✅ Vectorstore cleared: {store_dir}")
+        else:
+            print(f"Vectorstore {store_dir} does not exist, nothing to clear")
+    except Exception as e:
+        print(f"Error clearing vectorstore {store_dir}: {e}")
+
+
+def build_index_fresh(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VECTOR_STORE, clear_existing: bool = False):
+    """
+    Build a fresh Chroma store from files in `docs_dir`.
+    If clear_existing=True, removes any existing vectorstore first.
+    """
+    print(f"\n=== BUILDING {'FRESH ' if clear_existing else ''}INDEX ===")
+    print(f"Docs directory: {docs_dir}")
+    print(f"Store directory: {store_dir}")
+    print(f"Clear existing: {clear_existing}")
+
+    if clear_existing:
+        clear_vectorstore(store_dir)
+
+    root = Path(docs_dir)
+    store_dir.mkdir(parents=True, exist_ok=True)
+
+    # Debug the knowledge base files first
+    debug_knowledge_base_files(docs_dir)
+
+
+    # Check if index already exists (unless we're clearing)
+    if not clear_existing and _index_exists(store_dir):
+        print(f"Index already exists at {store_dir}, skipping build.")
+        debug_vectorstore_contents(store_dir)
+        return
+
+    texts: List[str] = []
+    metas: List[Dict[str, Any]] = []
+
+    print(f"Scanning for files in {root}...")
+    file_count = 0
+    for p in root.rglob("*"):
+        if not p.is_file() or p.suffix.lower() not in ALLOWED_EXTS:
+            continue
+
+        file_count += 1
+        print(f"Processing file {file_count}: {p.relative_to(root)}")
+
+        content = _read_text(p)
+        if not content:
+            print(f"[warn] Skipping unreadable file: {p}")
+            continue
+
+        print(f"  File content length: {len(content)} characters")
+
+        try:
+            chunks = _split_file_by_suffix(p, content)
+            print(f"  Split into {len(chunks)} chunks")
+        except Exception as e:
+            print(
+                f"[warn] Split failed for {p}: {e}; falling back to plain splitter")
+            chunks = _split_plain(content)
+            print(f"  Fallback split into {len(chunks)} chunks")
+
+        if not chunks:
+            print(f"  No chunks generated for {p}")
+            continue
+
+        # OPTIONAL: small local dedup per file
+        chunks = _dedup_texts(chunks)
+        print(f"  After dedup: {len(chunks)} chunks")
+
+        texts.extend(chunks)
+        metas.extend([{"source": str(p)}] * len(chunks))
+
+    print(f"\nTotal processing results:")
+    print(f"Files processed: {file_count}")
+    print(f"Total text chunks: {len(texts)}")
+
+    if not texts:
+        print("[ERROR] No documents found to index!")
+        return
+
+    print(f"Building Chroma vectorstore at {store_dir}...")
+
+    # Build or load persistent store, then add docs with stable ids (content hash)
+    vs = Chroma(persist_directory=str(store_dir),
+                embedding_function=_embedder())
+
+    # Chroma.add_texts allows ids, but raises on duplicates; since we only build once per process,
+    # we can just add once here. If you call build_index repeatedly in the same process, hash IDs help.
+    ids = [_hash_text(m["source"] + " :: " + t) for t, m in zip(texts, metas)]
+
+    print(f"Adding {len(texts)} texts to vectorstore...")
+    vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+
+    print(f"✅ Successfully indexed {len(texts)} chunks → {store_dir}")
+
+    # Verify the index was created
+    debug_vectorstore_contents(store_dir)
+    print(f"=== END INDEX BUILD ===\n")
+
+
 def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VECTOR_STORE):
     """
     Build a Chroma store from files in `docs_dir`, using a splitter chosen by file ending.
