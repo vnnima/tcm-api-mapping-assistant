@@ -20,15 +20,15 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
     if not messages:
         return {
             "messages": [
-                AIMessage(content=(
-                    "# 🔍 API Error Hilfe\n\n"
-                    "Hallo! Ich helfe bei Problemen mit der AEB TCM Screening API.\n\n"
-                    "Sie können mir einfach beschreiben was passiert ist - zum Beispiel:\n"
-                    "• \"Ich bekomme einen 400 Fehler\"\n"
-                    "• \"Mein Request funktioniert nicht\"\n"
-                    "• \"Was bedeutet dieser Error Code?\"\n\n"
-                    "Was ist das Problem?"
-                ))
+            AIMessage(content=(
+                "# 🔍 API Error Help\n\n"
+                "Hello! I help with problems related to the AEB TCM Screening API.\n\n"
+                "You can simply describe what happened - for example:\n"
+                "• \"I'm getting a 400 error\"\n"
+                "• \"My request isn't working\"\n"
+                "• \"What does this error code mean?\"\n\n"
+                "What's the problem?"
+            ))
             ]
         }
 
@@ -49,29 +49,29 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
 
     # Create a conversational system prompt
     sys = SystemMessage(content=(
-        "Du bist ein hilfsbereiter API-Support für die AEB TCM Screening API. "
-        "Beantworte Fragen zu API-Fehlern kurz und präzise auf Deutsch. "
-        "Sei freundlich und gesprächig. Wenn der Benutzer Code oder Errors zeigt, analysiere sie. "
-        "Nutze den gesamten Gesprächsverlauf um den Kontext zu verstehen. "
-        "Wenn keine spezifischen Docs verfügbar sind, nutze dein Wissen über häufige API-Probleme.\n\n"
+        "You are a helpful API support assistant for the AEB TCM Screening API. "
+        "Answer questions about API errors briefly and precisely in English. "
+        "Be friendly and conversational. If the user shows code or errors, analyze them. "
+        "Use the entire conversation history to understand the context. "
+        "If no specific docs are available, use your knowledge about common API problems.\n\n"
 
-        "HÄUFIGE API-FEHLER:\n"
-        "• 400 Bad Request: Syntax-/Validierungsfehler\n"
-        "• 401 Unauthorized: Authentifizierung fehlt\n"
-        "• 403 Forbidden: Keine Berechtigung\n"
-        "• 404 Not Found: Endpoint falsch\n"
-        "• 500 Server Error: Backend-Problem\n\n"
+        "COMMON API ERRORS:\n"
+        "• 400 Bad Request: Syntax/validation error\n"
+        "• 401 Unauthorized: Authentication missing\n"
+        "• 403 Forbidden: No permission\n"
+        "• 404 Not Found: Wrong endpoint\n"
+        "• 500 Server Error: Backend problem\n\n"
 
-        "HÄUFIGE TYPOS:\n"
-        "• 'addresse' statt 'addresses'\n"
-        "• 'clientId' statt 'clientIdentCode'\n"
-        "• 'suppressLog' statt 'suppressLogging'\n\n"
+        "COMMON TYPOS:\n"
+        "• 'addresse' instead of 'addresses'\n"
+        "• 'clientId' instead of 'clientIdentCode'\n"
+        "• 'suppressLog' instead of 'suppressLogging'\n\n"
 
-        "Antworte kurz und hilfsbereit. Frage nach, wenn du mehr Details brauchst.\n"
+        "Reply briefly and helpfully. Ask for more details if you need them.\n"
 
-        "Verfügbare Dokumentationsauszüge:\n" +
+        "Available documentation excerpts:\n" +
         ("\n".join(relevant_docs)
-         if relevant_docs else "Keine relevanten Dokumente gefunden.")
+         if relevant_docs else "No relevant documents found.")
     ))
 
     human = HumanMessage(content=user_input)
@@ -79,7 +79,7 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
         response = llm.invoke([sys, *messages, human])
     except Exception as e:
         response = AIMessage(
-            content=f"Entschuldigung, da ist ein Fehler aufgetreten: {str(e)}")
+            content=f"Sorry, an error occurred: {str(e)}")
 
     return {
         "messages": [response]

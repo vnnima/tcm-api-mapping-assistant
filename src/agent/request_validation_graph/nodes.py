@@ -22,19 +22,19 @@ def get_request_node(state: RequestValidationState) -> Dict[str, Any]:
     if not messages:
         return {
             "messages": [
-                AIMessage(content=(
-                    "# API Request Validation\n\n"
-                    "Ich helfe Ihnen dabei, Ihren API-Aufruf für die AEB TCM Screening API zu validieren.\n\n"
-                    "**Bitte geben Sie Ihren API-Request ein:**\n"
-                    "- Als JSON-Format\n"
-                    "- Vollständige Request-Struktur\n"
-                    "- Beispiel mit echten oder Test-Daten\n\n"
-                    "Ich prüfe dann:\n"
-                    "✅ Syntax und technische Korrektheit\n"
-                    "✅ Vollständigkeit der prüfrelevanten Felder\n"
-                    "✅ Fachliche Qualität der Datenfelder\n"
-                    "✅ Verbesserungsvorschläge für bessere Treffer-Bearbeitung"
-                ))
+            AIMessage(content=(
+                "# API Request Validation\n\n"
+                "I'll help you validate your API call for the AEB TCM Screening API.\n\n"
+                "**Please enter your API request:**\n"
+                "- In JSON format\n"
+                "- Complete request structure\n"
+                "- Example with real or test data\n\n"
+                "I will then check:\n"
+                "✅ Syntax and technical correctness\n"
+                "✅ Completeness of audit-relevant fields\n"
+                "✅ Professional quality of data fields\n"
+                "✅ Improvement suggestions for better hit processing"
+            ))
             ]
         }
 
@@ -50,7 +50,7 @@ def get_request_node(state: RequestValidationState) -> Dict[str, Any]:
         "user_request": user_input.strip(),
         "messages": [
             AIMessage(
-                content=f"Danke! Ich analysiere Ihren API-Request:\n\n```json\n{user_input.strip()}\n```")
+                content=f"Thank you! I'm analyzing your API request:\n\n```json\n{user_input.strip()}\n```")
         ]
     }
 
@@ -74,41 +74,43 @@ def validate_request_node(state: RequestValidationState) -> Dict[str, Any]:
     sys_message = SystemMessage(content=system_prompt)
 
     human_message = HumanMessage(content=f"""
-Bitte analysieren Sie den folgenden API-Request für die AEB TCM Screening API:
+Please analyze the following API request for the AEB TCM Screening API:
 
 ```json
 {user_request}
 ```
 
-**Führen Sie eine vollständige Validierung durch:**
+**Perform a comprehensive validation:**
 
-1. **Syntax-Prüfung:**
-   - Ist das JSON technisch korrekt?
-   - Sind alle Pflichtfelder vorhanden?
-   - Stimmt die API-Struktur?
+1. **Syntax check:**
+   * Is the JSON technically correct?
+   * Are all required fields present?
+   * Does the API structure match?
 
-2. **Fachliche Vollständigkeit:**
-   - Sind alle prüfrelevanten Felder vorhanden?
-   - Sind die Feldwerte fachlich sinnvoll befüllt?
-   - Entspricht der `addressType` den Daten?
+2. **Functional completeness:**
+   * Are all screening-relevant fields included?
+   * Are the field values populated in a meaningful, domain-correct way?
+   * Does the `addressType` correspond to the data?
 
-3. **Qualitäts-Analyse:**
-   - Welche Datenqualitätsprobleme gibt es?
-   - Welche Felder könnten die Trefferqualität verbessern?
-   - Gibt es Inkonsistenzen in den Daten?
+3. **Quality analysis:**
+   * What data quality issues are present?
+   * Which fields could improve match quality?
+   * Are there inconsistencies in the data?
 
-4. **Verbesserungsvorschläge:**
-   - Welche zusätzlichen Felder sollten befüllt werden?
-   - Wie können Organisationseinheiten, IDs, Conditions verbessert werden?
-   - Welche Optimierungen würden die Treffer-Bearbeitung erleichtern?
+4. **Recommendations for improvement:**
+   * Which additional fields should be filled?
+   * How can organizational units, IDs, and conditions be improved?
+   * Which optimizations would make hit processing easier?
 
-**Antworten Sie strukturiert mit:**
-- ✅/❌ für jeden Prüfpunkt
-- Konkreten Verbesserungsvorschlägen
-- Einem optimierten Request-Beispiel
-- Begründungen für alle Empfehlungen
+**Respond in a structured way with:**
 
-Seien Sie detailliert und praxisorientiert!
+* ✅/❌ for each check item
+* Concrete improvement suggestions
+* An optimized request example
+* Justifications for all recommendations
+
+Be detailed and practice-oriented!
+
 """)
 
     response = llm.invoke([sys_message, human_message])
@@ -138,7 +140,7 @@ def show_results_node(state: RequestValidationState) -> Dict[str, Any]:
     if not validation_results:
         return {
             "messages": [
-                AIMessage(content="❌ Keine Validierungsergebnisse verfügbar.")
+            AIMessage(content="❌ No validation results available.")
             ],
             "completed": True
         }
@@ -148,20 +150,20 @@ def show_results_node(state: RequestValidationState) -> Dict[str, Any]:
     fields_status = "✅" if state.get("required_fields_present") else "❌"
 
     summary_content = f"""
-## 📋 Validierung Abgeschlossen
+## 📋 Validation Complete
 
-**Ergebnisse:**
-- {syntax_status} **Syntax**: {"Korrekt" if state.get("syntax_valid") else "Probleme gefunden"}
-- {fields_status} **Pflichtfelder**: {"Vollständig" if state.get("required_fields_present") else "Unvollständig"}
+**Results:**
+- {syntax_status} **Syntax**: {"Correct" if state.get("syntax_valid") else "Issues found"}
+- {fields_status} **Required Fields**: {"Complete" if state.get("required_fields_present") else "Incomplete"}
 
-Die detaillierte Analyse finden Sie in der vorherigen Nachricht.
+You can find the detailed analysis in the previous message.
 
-**Nächste Schritte:**
-- 🔄 Weiteren Request validieren
-- 📝 Request basierend auf Empfehlungen überarbeiten  
-- ❓ Fragen zu den Verbesserungsvorschlägen stellen
+**Next Steps:**
+- 🔄 Validate another request
+- 📝 Revise request based on recommendations  
+- ❓ Ask questions about the improvement suggestions
 
-*Für eine neue Validierung geben Sie einfach einen neuen API-Request ein.*
+*To perform a new validation, simply enter a new API request.*
 """
 
     return {

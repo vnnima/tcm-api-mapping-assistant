@@ -22,21 +22,21 @@ def welcome_node(state: DocumentationQnaState) -> Dict[str, Any]:
         return {
             "messages": [
                 AIMessage(content=(
-                    "# 📚 AEB TCM Screening API Dokumentation Q&A\n\n"
-                    "Willkommen! Ich bin Ihr Dokumentations-Assistent für die AEB TCM Screening API.\n\n"
-                    "**Was ich für Sie tun kann:**\n"
-                    "• Fragen zur API-Struktur und Parametern beantworten\n"
-                    "• Beispiele für API-Aufrufe und Responses erklären\n"
-                    "• Integration und Implementierung unterstützen\n"
-                    "• Troubleshooting bei API-Problemen helfen\n\n"
-                    "**Stellen Sie einfach Ihre Frage** - ich durchsuche die gesamte Dokumentation "
-                    "und gebe Ihnen eine präzise Antwort basierend auf den offiziellen Unterlagen.\n\n"
-                    "**Beispiel-Fragen:**\n"
-                    "- Wie ist die Request-Struktur für screenAddresses aufgebaut?\n"
-                    "- Was bedeutet der Parameter suppressLogging?\n"
-                    "- Welche Response-Codes gibt es und was bedeuten sie?\n"
-                    "- Wie implementiere ich eine Batch-Prüfung?\n\n"
-                    "*Ihre Frage:*"
+                    "# AEB TCM Screening API Documentation Q&A\n\n"
+                    "Welcome! I am your documentation assistant for the AEB TCM Screening API.\n\n"
+                    "**What I can do for you:**\n"
+                    "• Answer questions about API structure and parameters\n"
+                    "• Explain examples of API calls and responses\n"
+                    "• Support integration and implementation\n"
+                    "• Help with API troubleshooting\n\n"
+                    "**Simply ask your question** - I will search through the entire documentation "
+                    "and provide you with a precise answer based on the official documents.\n\n"
+                    "**Example questions:**\n"
+                    "- How is the request structure for screenAddresses built?\n"
+                    "- What does the suppressLogging parameter mean?\n"
+                    "- What response codes are there and what do they mean?\n"
+                    "- How do I implement batch screening?\n\n"
+                    "*Your question:*"
                 ))
             ]
         }
@@ -59,7 +59,7 @@ def answer_question_node(state: DocumentationQnaState) -> Dict[str, Any]:
         return {
             "messages": [
                 AIMessage(
-                    content="Bitte stellen Sie eine Frage zur AEB TCM Screening API Dokumentation.")
+                    content="Please ask a question about the AEB TCM Screening API documentation.")
             ]
         }
 
@@ -76,34 +76,34 @@ def answer_question_node(state: DocumentationQnaState) -> Dict[str, Any]:
 
     # Prepare system message for the LLM
     sys = SystemMessage(content=(
-        "Du bist ein Experte für die AEB TCM Screening API Dokumentation. "
-        "Beantworte Benutzerfragen präzise und hilfreich auf Deutsch basierend auf den verfügbaren Dokumentationsauszügen. "
-        "Nutze IMMER die bereitgestellten Dokumentationsauszüge als primäre Quelle. "
-        "Wenn keine passenden Informationen in den Auszügen gefunden werden, sage das ehrlich und "
-        "verwende das get_tcm_api_documentation_url Tool um den Link zur offiziellen Dokumentation bereitzustellen. "
-        "Gib konkrete Beispiele und Code-Snippets wenn möglich. "
-        "Strukturiere deine Antwort klar mit Überschriften und Listen."
+        "You are an expert for the AEB TCM Screening API documentation. "
+        "Answer user questions precisely and helpfully in English based on the available documentation excerpts. "
+        "ALWAYS use the provided documentation excerpts as your primary source. "
+        "If no suitable information is found in the excerpts, say so honestly and "
+        "use the get_tcm_api_documentation_url tool to provide the link to the official documentation. "
+        "Provide concrete examples and code snippets when possible. "
+        "Structure your answer clearly with headings and lists."
     ))
 
     # Prepare documentation excerpts
     if search_results:
         snippets_text = "\n\n".join([
-            f"**Dokumentationsauszug {i+1}:**\n{snippet}"
+            f"**Documentation excerpt {i+1}:**\n{snippet}"
             for i, snippet in enumerate(search_results)
         ])
     else:
-        snippets_text = "*Keine passenden Dokumentationsauszüge gefunden.*"
+        snippets_text = "*No matching documentation excerpts found.*"
 
-    # Create human message with question and context
+        # Create human message with question and context
     human = HumanMessage(content=f"""
-**Benutzerfrage:** {user_input}
+**User question:** {user_input}
 
-**Verfügbare Dokumentationsauszüge:**
+**Available documentation excerpts:**
 {snippets_text}
 
-Beantworte die Frage basierend auf den verfügbaren Dokumentationsauszügen. 
-Wenn die Dokumentation nicht ausreicht, nutze das get_tcm_api_documentation_url Tool und füge den Link in deine Antwort ein.
-Nutze klare Strukturierung mit Markdown-Formatierung.
+Answer the question based on the available documentation excerpts. 
+If the documentation is not sufficient, use the get_tcm_api_documentation_url tool and include the link in your answer.
+Use clear structuring with Markdown formatting.
 """)
 
     try:

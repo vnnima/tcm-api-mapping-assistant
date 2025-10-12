@@ -11,7 +11,7 @@ from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
                          get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
 from agent.llm import get_llm
 from agent.config import Config
-from agent.rag import rag_search, build_index, ensure_index_built, debug_vectorstore_contents, debug_knowledge_base_files
+from agent.rag import rag_search, build_index, ensure_index_built, debug_vectorstore_contents, debug_knowledge_base_files, build_index_fresh
 
 
 class NodeNames(str, Enum):
@@ -44,9 +44,9 @@ def intro_node(state: ApiMappingState) -> dict:
         return {
             "messages": [
                 AIMessage(content=(
-                    "Hallo! Ich bin dein **AEB API Mapping Assistant**. "
-                    "Ich helfe dir dabei, die **TCM Screening API** sauber in dein System zu integrieren.\n\n"
-                    "Möchtest du mit der Integration beginnen? (Ja/Nein)"
+                    "Hello! I'm your **AEB API Mapping Assistant**. "
+                    "I help you cleanly integrate the **TCM Screening API** into your system.\n\n"
+                    "Would you like to start with the integration? (Yes/No)"
                 ))
             ]
         }
@@ -59,8 +59,8 @@ def intro_node(state: ApiMappingState) -> dict:
             "completed": True,
             "messages": [
                 AIMessage(content=(
-                    "Alles klar! Wenn du später Hilfe bei der TCM Screening API Integration benötigst, stehe ich gerne zur Verfügung. "
-                    "Viel Erfolg!"
+                    "All right! If you need help with the TCM Screening API integration later, I'm happy to assist. "
+                    "Good luck!"
                 ))
             ]
         }
@@ -69,8 +69,8 @@ def intro_node(state: ApiMappingState) -> dict:
             "started": True,
             "messages": [
                 AIMessage(content=(
-                    "Super! Dann lass uns mit der Integration der TCM Screening API beginnen. "
-                    "Zuerst benötige ich einige Informationen von dir."
+                    "Great! Let's start with the TCM Screening API integration. "
+                    "First, I need some information from you."
                 ))
             ]
         }
@@ -122,28 +122,28 @@ def clarify_node(state: ApiMappingState) -> dict:
     user_input = get_last_user_message(messages)
 
     last_question = get_last_assistant_message(
-        messages) or "Möchtest du mit der API Mapping Integration beginnen? (Ja/Nein)"
+        messages) or "Would you like to start with the API mapping integration? (Yes/No)"
     if not last_question:
-        last_question = "eine Frage"
+        last_question = "a question"  # TODO: Handle this differently
 
     sys = SystemMessage(content=(
-        "Du bist ein hilfsbereiter Assistant. Der Benutzer hat eine Frage nicht richtig beantwortet. "
-        "Schaue dir die ursprüngliche Frage und die Antwort des Benutzers an und erkläre freundlich, "
-        "was falsch war und wie er richtig antworten soll."
+        "You are a helpful assistant. The user has not answered a question correctly. "
+        "Look at the original question and the user's answer and explain kindly "
+        "what was wrong and how they should answer correctly."
     ))
 
     human = HumanMessage(content=f"""
-Die ursprüngliche Frage/Aufforderung war:
+The original question/prompt was:
 "{last_question}"
 
-Der Benutzer hat geantwortet: "{user_input}"
+The user answered: "{user_input}"
 
-Analysiere die Antwort und erkläre freundlich:
-1. Was das Problem mit der Antwort ist
-2. Wie er richtig antworten soll (mit konkreten Beispielen)
-3. Stelle die Frage dann nochmal
+Analyze the response and explain kindly:
+1. What the problem with the answer is
+2. How they should answer correctly (with concrete examples)
+3. Then ask the question again
 
-Bleibe kurz, hilfreich und freundlich.
+Keep it brief, helpful and friendly.
 """)
 
     resp = llm.invoke([sys, human])
@@ -176,9 +176,9 @@ def ask_endpoints_node(state: ApiMappingState) -> dict:
         return {
             "messages": [
                 AIMessage(content=(
-                    "Bitte zuerst die **AEB RZ Endpoints** angeben (mindestens eine URL). "
-                    "Diese sind für die API-Integration erforderlich.\n"
-                    f"Hinweis: {Config.ENDPOINTS_HELP_URL}\n\n"
+                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
+                    "These are required for API integration.\n"
+                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
                     "Format:\n"
                     "Test: https://...\n"
                     "Prod:  https://..."
@@ -204,9 +204,9 @@ def ask_endpoints_node(state: ApiMappingState) -> dict:
             "started": True,
             "messages": [
                 AIMessage(content=(
-                    "Bitte zuerst die **AEB RZ Endpoints** angeben (mindestens eine URL). "
-                    "Diese sind für die API-Integration erforderlich.\n"
-                    f"Hinweis: {Config.ENDPOINTS_HELP_URL}\n\n"
+                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
+                    "These are required for API integration.\n"
+                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
                     "Format:\n"
                     "Test: https://...\n"
                     "Prod:  https://..."
@@ -222,7 +222,8 @@ def ask_endpoints_node(state: ApiMappingState) -> dict:
         "started": True,
         "provisioning": prov,
         "messages": [
-            AIMessage(content="Danke! Endpoints erfasst:\n" + "\n".join(lines))
+            AIMessage(content="Thank you! Endpoints recorded:\n" +
+                      "\n".join(lines))
         ]
     }
 
@@ -253,10 +254,10 @@ def ask_client_node(state: ApiMappingState) -> dict:
         return {
             "messages": confirmation_msgs + [
                 AIMessage(content=(
-                    "2) **Mandantenname (clientIdentCode)**:\n"
-                    "- Für jeden Kunden steht ein eigener Mandant zur Verfügung.\n"
-                    "Bitte teilen Sie Ihren **clientIdentCode** mit (z. B. ACME01).\n\n"
-                    "Format: `clientIdentCode=ACME01` oder `Mandant: ACME01`"
+                    "2) **Client Name (clientIdentCode)**:\n"
+                    "- A separate client is available for each customer.\n"
+                    "Please share your **clientIdentCode** (e.g. ACME01).\n\n"
+                    "Format: `clientIdentCode=ACME01` or `Client: ACME01`"
                 ))
             ]
         }
@@ -269,10 +270,10 @@ def ask_client_node(state: ApiMappingState) -> dict:
             "provisioning": prov,
             "messages": confirmation_msgs + [
                 AIMessage(content=(
-                    "2) **Mandantenname (clientIdentCode)**:\n"
-                    "- Für jeden Kunden steht ein eigener Mandant zur Verfügung.\n"
-                    "Bitte teilen Sie Ihren **clientIdentCode** mit (z. B. ACME01).\n\n"
-                    "Format: `clientIdentCode=ACME01` oder `Mandant: ACME01`"
+                    "2) **Client Name (clientIdentCode)**:\n"
+                    "- A separate client is available for each customer.\n"
+                    "Please share your **clientIdentCode** (e.g. ACME01).\n\n"
+                    "Format: `clientIdentCode=ACME01` or `Client: ACME01`"
                 ))
             ]
         }
@@ -281,7 +282,7 @@ def ask_client_node(state: ApiMappingState) -> dict:
         "provisioning": prov,
         "messages": confirmation_msgs + [
             AIMessage(
-                content=f"Danke! Mandant erfasst: clientIdentCode={prov.get('clientIdentCode', 'N/A')}")
+                content=f"Thank you! Client recorded: clientIdentCode={prov.get('clientIdentCode', 'N/A')}")
         ]
     }
 
@@ -316,18 +317,18 @@ def ask_wsm_node(state: ApiMappingState) -> dict:
             "provisioning": prov,
             "messages": [
                 AIMessage(content=(
-                    "3) **WSM Benutzer für Authentifizierung**:\n"
-                    "- Zusätzlich zum Mandanten gibt es einen **technischen WSM-Benutzer** inkl. Passwort für die API-Anbindung.\n"
-                    "Ist dieser Benutzer bereits eingerichtet? (Ja/Nein)"
+                    "3) **WSM User for Authentication**:\n"
+                    "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
+                    "Is this user already set up? (Yes/No)"
                 ))
             ]
         }
 
-    yn = "Ja" if prov.get("wsm_user_configured") else "Nein"
+    yn = "Yes" if prov.get("wsm_user_configured") else "No"
     return {
         "provisioning": prov,
         "messages": [
-            AIMessage(content=f"WSM-Benutzer vorhanden: {yn}.")
+            AIMessage(content=f"WSM user available: {yn}.")
         ]
     }
 
@@ -350,65 +351,65 @@ def route_from_wsm(state: ApiMappingState) -> str:
 def general_screening_info_node(state: ApiMappingState) -> dict:
     prov = state.get("provisioning", {})
     response_content = f"""
-### Anleitung zur Erst-Integration der Sanktionslistenprüfung
+### Initial Integration Guide for Sanctions List Screening
 
-#### 1. Formate
-- **JSON/REST**: Nutzung der REST-API für die Kommunikation.
+#### 1. Formats
+- **JSON/REST**: Use of REST API for communication.
 
-#### 2. Prüfrelevante Objekte
-- **Stammdaten**: Einzelprüfung oder Bulk (max. 100 Einträge).
-- **Transaktionen**: Prüfung bei Anlage oder Änderung.
+#### 2. Objects to be Screened
+- **Master Data**: Individual screening or bulk (max. 100 entries).
+- **Transactions**: Screening during creation or modification.
 
-#### 3. Felder
-- **Pflichtfelder**:
+#### 3. Fields
+- **Required Fields**:
   - Name
-  - Adresse
-  - Eindeutige Referenz
-- **Prüfrelevante Felder**:
-  - Adresstyp
-- **Optionale Felder**: Keine spezifischen optionalen Felder definiert.
+  - Address
+  - Unique Reference
+- **Screening-relevant Fields**:
+  - Address Type
+- **Optional Fields**: No specific optional fields defined.
 
-#### 4. Trigger
-- **Anlage/Änderung**: Automatische Prüfung bei neuen oder geänderten Stammdaten und Transaktionen.
-- **Periodische Batchprüfung**: Empfohlen 1× pro Monat.
+#### 4. Triggers
+- **Creation/Modification**: Automatic screening for new or changed master data and transactions.
+- **Periodic Batch Screening**: Recommended once per month.
 
-#### 5. Anbindungsvarianten
-- **a) Einseitige Übergabe via screenAddresses**:
-  - Response: Treffer/Nichttreffer
-  - E-Mail an TCM-Empfänger
-  - Manuelles (Ent-)Sperren erforderlich
+#### 5. Integration Variants
+- **a) One-way submission via screenAddresses**:
+  - Response: Hit/No hit
+  - Email to TCM recipient
+  - Manual (un)blocking required
 
-- **b) Übergabe + regelmäßige Nachprüfung**:
+- **b) Submission + regular re-screening**:
   - Parameter: `suppressLogging=true`
-  - Frequenz: Alle 60 Minuten
-  - Automatische Entsperrung nach Good-Guy
+  - Frequency: Every 60 minutes
+  - Automatic unblocking after Good-Guy classification
 
-- **c) Optionaler Deep-Link via screeningLogEntry**:
-  - Temporärer Link
-  - Integration als Button/Menu im Partnersystem
+- **c) Optional Deep-Link via screeningLogEntry**:
+  - Temporary link
+  - Integration as button/menu in partner system
 
-#### 6. Response-Szenarien
+#### 6. Response Scenarios
 - **matchFound=true & wasGoodGuy=false**:
-  - Ergebnis: Treffer
-  - Aktion: (Optional) Sperre/Benachrichtigung
+  - Result: Hit found
+  - Action: (Optional) Block/Notification
 
 - **matchFound=false & wasGoodGuy=false**:
-  - Ergebnis: Kein Treffer
-  - Aktion: Keine
+  - Result: No hit
+  - Action: None
 
 - **matchFound=false & wasGoodGuy=true**:
-  - Ergebnis: Kein Treffer (bereits Good-Guy)
-  - Aktion: Keine
+  - Result: No hit (already Good-Guy)
+  - Action: None
 
 #### Endpoints
-- **Test-Endpoint**: {prov.get('test_endpoint') or '<fehlt>'}
-- **Prod-Endpoint**: {prov.get('prod_endpoint') or '<fehlt>'}
-- **Mandant (clientIdentCode)**: {prov.get('clientIdentCode') or '<fehlt>'}
-- **WSM Benutzer vorhanden**: {('Ja' if prov.get('wsm_user_configured') else 'Nein' if prov.get('wsm_user_configured') is not None else '<unbekannt>')}
+- **Test Endpoint**: {prov.get('test_endpoint') or '<missing>'}
+- **Prod Endpoint**: {prov.get('prod_endpoint') or '<missing>'}
+- **Client (clientIdentCode)**: {prov.get('clientIdentCode') or '<missing>'}
+- **WSM User Available**: {('Yes' if prov.get('wsm_user_configured') else 'No' if prov.get('wsm_user_configured') is not None else '<unknown>')}
 
-#### Hinweise
-- Log-Einträge können in Compliance Screening Logs erstellt werden, um einen zentralen Audit-Trail zu führen.
-- Technische Überwachung der Aktualität der Sanktionslisten ist möglich, um z. B. Firewall-Probleme zu identifizieren.
+#### Notes
+- Log entries can be created in Compliance Screening Logs to maintain a central audit trail.
+- Technical monitoring of sanctions list currency is possible to identify issues like firewall problems.
 """
 
     return {
@@ -420,7 +421,7 @@ def general_screening_info_node(state: ApiMappingState) -> dict:
 def decision_interrupt_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "choice_or_question",
-        "prompt": "Drücke `weiter` zum Fortfahren oder stelle deine Frage.",
+        "prompt": "Press `continue` to proceed or ask your question.",
     })
 
     decision, question = None, None
@@ -453,50 +454,60 @@ def route_from_decision_interrupt(state: ApiMappingState) -> str:
 def explain_screening_variants_node(state: ApiMappingState) -> dict:
     """Explain the three screening variants for API integration."""
     response_content = """
-## Drei Varianten für die Sanktionslistenprüfung per API
+# Basic Concept Compliance Screening
 
-### 1. Einseitige Datenübergabe (Basis-Variante)
+### Recommended Options for API Usage
 
-**Funktionsweise:**
-- Übergabe einzelner Geschäftspartner oder Transaktionsdaten via `screenAddresses`
-- Datensatz sollte Name, Adresse, eindeutige Referenz und Adresstyp enthalten
-- Prüfung gegen Sanktionslisten, Protokollierung in TCM
-- Response: Treffer/Nichttreffer direkt im API-Response
+#### 1. One-Way Transfer Without Rechecks
 
-**Workflow bei Treffer:**
-- Optional: Automatische Sperre im Partnersystem oder Benutzerbenachrichtigung
-- E-Mail-Versendung an konfigurierten TCM-Empfänger (Compliance-Verantwortlicher)
-- Manuelle Bearbeitung in TCM: Good-Guy-Definition oder Treffer-Bestätigung
-- Entsperrung im Partnersystem erfolgt manuell nach Good-Guy-Definition
+In the first option, data is transferred from a partner system to **Trade Compliance Management** on a one-way basis only. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
-### 2. Übergabe mit automatischer Nachprüfung (Erweiterte Variante)
+A business partner check is then performed and logged in TCM. The result of the check can be a match or non-match, which is reported directly in the API Response message. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected (`"matchFound": true, "wasGoodGuy": false`).
 
-**Zusätzliche Funktionalität:**
-- Regelmäßige automatische Nachprüfung offener Treffer (z.B. alle 60 Minuten)
-- Verwendung derselben `screenAddresses` API mit Parameter `suppressLogging=true`
-- Automatische Entsperrung nach Good-Guy-Definition in TCM
+In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in TCM (defines a **good guy** for false positives or marks them as true matches). This procedure only requires the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) that must be called once per business object (master data record or transactional data). The object must be released in the partner system or finally stopped or deleted manually by a user after the match handling in **Trade Compliance Management**.
 
-**Implementierung:**
-- Partnersystem speichert Objekte mit Adresstreffern
-- Periodische Wiederholung der Prüfung mit `suppressLogging=true`
-- Automatisches Entsperren bei Good-Guy-Status
+#### 2. Transfer with Response Evaluation and Periodic Rechecks
 
-### 3. Deep-Link Integration (Komfort-Funktion)
+In the second variant, data is transferred from the partner system and, in addition, open matches are regularly checked so that they can not only be blocked but also unblocked in the partner system. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
-**Zusätzliche Schnittstelle:**
-- API `screeningLogEntry` für temporäre Weblinks zur TCM-Trefferbearbeitung
-- Implementierung als Button/Menüeintrag im Partnersystem
-- Direkter Zugang zur Bearbeitungsmaske in TCM
+A business partner check is then performed, which is logged in TCM. The result of the check can be a match or a non-match, which is reported directly in the response. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected (`"matchFound": true, "wasGoodGuy": false`).
 
-**Anwendung:**
-- Benutzer kann Treffer direkt aus dem Partnersystem heraus bearbeiten
-- Link nur temporär gültig - daher on-demand Generierung erforderlich
-- Erhöht Benutzerfreundlichkeit und Workflow-Effizienz
+In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in **Trade Compliance Management** (defines a **good guy** for false positives or marks them as true matches). This procedure requires the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) that have to be used several times.
 
-### Empfehlung
-- **Variante 1:** Für einfache Integration, manuelle Nachbearbeitung akzeptabel
-- **Variante 2:** Für automatisierte Workflows, reduziert manuellen Aufwand
-- **Variante 3:** Zusätzlich zu Variante 1 oder 2 für optimale Benutzererfahrung
+- First, the initial check must be performed.
+- For business objects that received a match during the initial check (`"matchFound": true, "wasGoodGuy": false`), a periodic recheck must be performed so that a subsequent noncritical check result can be determined in the partner system after the match processing in TCM.
+- This recheck must be done until the check result gets uncritical (`"matchFound": false, "wasGoodGuy": true`).
+
+This enables an automatic unblocking of the business object in the partner system after the **good guy** definition. The partner system must save the critical check results for address matches. The suggested frequency for the recheck is every 60 minutes. In addition, the parameter `suppressLogging` of the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) should be sent with the value `true` for periodic rechecks so that the periodic checks are not counted in addition to the invoiceable check volume.
+
+#### 3. Transfer with Direct Access to Match Handling
+
+The third option can be implemented as a supplement to the first or second variant. After a compliance screening check of a business object with the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`), the response can be evaluated in the partner system if there are potential matches (`"matchFound": true, "wasGoodGuy": false`).
+
+This use case assumes that a user accesses the match handling directly from the partner system. In the partner system, the user should not only be shown the match, but there should also be a button or menu function to call up the match handling in **Trade Compliance Management**. The `screeningLogEntry` API can be used to generate and open a web link to the match handling UI in **Trade Compliance Management**. Since the web link is only valid temporarily, the API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system.
+
+### Our Recommendations
+
+#### For Simple Implementations
+**Choose Variant 1** if you have:
+- Limited development resources
+- Low transaction volumes
+- Acceptable manual compliance workflow
+- Basic compliance requirements
+
+#### For Automated Workflows  
+**Choose Variant 2** if you have:
+- High transaction volumes
+- Need for automated unblocking
+- Dedicated compliance team
+- Advanced integration capabilities
+
+#### For Optimal User Experience
+**Add Variant 3** to either Variant 1 or 2 if you want:
+- Seamless user experience
+- Direct access to match handling
+- Reduced context switching
+- Enhanced compliance efficiency
 """
 
     return {
@@ -508,51 +519,46 @@ def explain_screening_variants_node(state: ApiMappingState) -> dict:
 def explain_responses_node(state: ApiMappingState) -> dict:
     """Explain the different response scenarios from the screening API."""
     response_content = """
-## API Response-Szenarien und Systemreaktionen
+### Response Scenarios
 
-Die Sanktionslistenprüfung liefert verschiedene Response-Kombinationen, die unterschiedliche Aktionen im Partnersystem erfordern:
+#### Scenario 1: Potential Match Detected
 
-### 📍 Treffer-Szenario
+The following response message describes the scenario where a potential address match has been detected. A match handling in Trade Compliance Management is required and the object in the partner system should be blocked:
+
 ```json
-{
-  "matchFound": true,
-  "wasGoodGuy": false
-}
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "VEN_4714",
+    "referenceComment": "Vendor 4714"
+  }
 ```
-**Bedeutung:** Sanktionslistentreffer gefunden, noch nicht als unbedenklich eingestuft
 
-**Empfohlene Systemreaktion:**
-- 🔒 **Automatische Sperre** des Geschäftspartners/der Transaktion
-- 📧 **Benachrichtigung** an Compliance-Verantwortliche
-- 🚫 **Blockierung** weiterer Geschäftsprozesse bis zur manuellen Freigabe
-- 📝 **Logging** der Sperrung für Audit-Zwecke
+#### Scenario 2: No Match Found
 
-### ✅ Unbedenklich-Szenario
+The following scenario detects an uncritical address where no further action in Trade Compliance Management is required and where the business object in the partner system can be further processed and used:
+
 ```json
-{
-  "matchFound": false,
-  "wasGoodGuy": false
-}
+  {
+    "matchFound": false,
+    "wasGoodGuy": false,
+    "referenceId": "VEN_4715",
+    "referenceComment": "Vendor 4715"
+  }
 ```
-**Bedeutung:** Keine Sanktionslistentreffer gefunden
 
-**Empfohlene Systemreaktion:**
-- ✅ **Keine Aktion erforderlich** - Geschäftsprozess kann fortgesetzt werden
-- 📝 **Optional:** Protokollierung der erfolgreichen Prüfung
+#### Scenario 3: Good Guy Definition
 
-### 🟢 Good-Guy-Szenario
+The third scenario detects an uncritical address due to a previous good guy definition in Trade Compliance Management. The business object in the partner system can be further processed and used:
+
 ```json
-{
-  "matchFound": false,
-  "wasGoodGuy": true
-}
+  {
+    "matchFound": false,
+    "wasGoodGuy": true,
+    "referenceId": "VEN_4716",
+    "referenceComment": "Vendor 4716"
+  }
 ```
-**Bedeutung:** Bereits als unbedenklich (Good-Guy) klassifiziert, daher keine erneute Prüfung
-
-**Empfohlene Systemreaktion:**
-- ✅ **Keine Aktion erforderlich** - Good-Guy-Status bestätigt
-- 📝 **Optional:** Vermerk über Good-Guy-Status im System
-- ⚡ **Performance-Vorteil** durch verkürzte Prüfzeit
 """
 
     return {
@@ -566,23 +572,23 @@ def api_mapping_intro_node(state: ApiMappingState) -> dict:
     response_content = """
 ## 🔄 API Mapping Service
 
-Jetzt können wir Ihnen beim Mapping Ihrer bestehenden API-Struktur auf die AEB TCM Screening API helfen.
+Now we can help you map your existing API structure to the AEB TCM Screening API.
 
-**Was wir benötigen:**
+**What we need:**
 
-### 1. System-Information
-Bitte beschreiben Sie:
-- **Systemname/Typ:** Welches System möchten Sie anbinden? (z.B. SAP, Salesforce, Custom ERP)
-- **Prozess:** Welcher Geschäftsprozess soll integriert werden? (z.B. Kundenanlage, Bestellverarbeitung, Lieferantenprüfung)
+### 1. System Information
+Please describe:
+- **System Name/Type:** Which system do you want to connect? (e.g. SAP, Salesforce, Custom ERP)
+- **Process:** Which business process should be integrated? (e.g. Customer creation, Order processing, Supplier verification)
 
-### 2. API-Metadaten
-Wir benötigen Ihre bestehende API-Struktur in einem der folgenden Formate:
-- **JSON-Schema** Ihrer Adress-/Partnerdaten
-- **XML-Beispiel** einer typischen Datenanfrage
-- **CSV-Struktur** mit Feldnamen und -beschreibungen
-- **OpenAPI/Swagger** Definition
+### 2. API Metadata
+We need your existing API structure in one of the following formats:
+- **JSON Schema** of your address/partner data
+- **XML Example** of a typical data request
+- **CSV Structure** with field names and descriptions
+- **OpenAPI/Swagger** definition
 
-**Nächster Schritt:** Bitte nennen Sie zunächst Ihr **Systemname** und den **anzubindenden Prozess**.
+**Next Step:** Please first provide your **system name** and the **process to be integrated**.
 """
 
     return {
@@ -594,7 +600,7 @@ Wir benötigen Ihre bestehende API-Struktur in einem der folgenden Formate:
 def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "get_api_data",
-        "prompt": "Bitte geben Sie Ihren Systemnamen, Prozess und bestehenden API-Metadaten an (z.B. JSON-Schema, XML-Beispiel, CSV-Struktur, OpenAPI/Swagger Definition).",
+        "prompt": "Please provide your system name, process, and existing API metadata (e.g., JSON Schema, XML example, CSV structure, OpenAPI/Swagger definition).",
     })
 
     system_name, process, api_metadata = None, None, None
@@ -621,63 +627,135 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
 def process_and_map_api_node(state: ApiMappingState) -> dict:
     """Process customer API metadata and generate mapping suggestions."""
     messages = state.get("messages", [])
-    user_input = get_last_user_message(messages)
     prov = state.get("provisioning", {})
+    api_data_filename = state.get("api_metadata", "")
+    if not api_data_filename:
+        raise Exception(
+            "Api data has no filename. Something went wrong with storing it")
 
-    ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
-                       Config.KNOWLEDGE_BASE_VECTOR_STORE)
-    ensure_index_built(Config.API_DATA_DIR.as_posix(),
-                       Config.API_DATA_VECTOR_STORE)
+    with open(Config.API_DATA_DIR / api_data_filename) as customer_data:
+        user_input = customer_data.read()
 
-    api_data_snippets = rag_search(
-        "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
-        store_dir=Config.API_DATA_VECTOR_STORE,
-    )
+    # NOTE: Rebuild API data vectorstore fresh to only include current session's data
+    # This prevents mixing API data from different customers/sessions
+    print("🔄 Rebuilding API data vectorstore for current session only...")
+    build_index_fresh(Config.API_DATA_DIR.as_posix(),
+                      Config.API_DATA_VECTOR_STORE, clear_existing=True)
 
-    docs_snippets = rag_search(
-        "REST API, screening, name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
-        store_dir=Config.KNOWLEDGE_BASE_VECTOR_STORE,
-    )
+    # Check if customer API data is too large for direct inclusion
+    user_input_token_estimate = len(user_input) // 4 if user_input else 0
+
+    MAX_DIRECT_INCLUSION_TOKENS = 100_000
+
+    if user_input_token_estimate > MAX_DIRECT_INCLUSION_TOKENS:
+        print(
+            f"Customer API data too large ({user_input_token_estimate} estimated tokens), using RAG search")
+        # Use RAG search on customer data (now only contains current session's data)
+        api_data_snippets = rag_search(
+            "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,
+            store_dir=Config.API_DATA_VECTOR_STORE,
+        )
+
+        customer_api_content = f"""
+    **Relevant excerpts from customer API metadata (via RAG):**
+    {api_data_snippets if api_data_snippets else '[No relevant API data found]'}
+
+    **Note:** The complete API metadata was too large for direct analysis. 
+    The above excerpts were selected based on relevance for address and name fields.
+    """
+    else:
+        print(
+            f"Customer API data size acceptable ({user_input_token_estimate} estimated tokens), including directly")
+        customer_api_content = user_input
 
     sys = SystemMessage(content=(
-        "Du bist ein Experte für API-Mapping zwischen Kundensystemen und der AEB TCM Screening API. "
-        "Analysiere die vom Kunden bereitgestellten API-Metadaten und erstelle ein präzises Mapping "
-        "auf die AEB screenAddresses API-Struktur. Berücksichtige dabei die verfügbare Dokumentation."
+        """
+You are **AEB’s API Mapping Assistant**. Your job is to propose a field mapping from a customer’s source data model to AEB’s **Compliance Screening – Address Screening** REST API.
+
+## Objectives
+
+1. Produce a precise mapping table from **customer fields** → **AEB API fields**.
+2. Ask clarifying questions when the mapping is ambiguous.
+3. **Never hallucinate** fields that are not present in the customer input or AEB spec.
+4. Respect entity vs. person nuances (e.g., companies shouldn’t fill `surname`/`prenames`).
+5. Output must be **deterministic**, concise, and easy to implement.
+
+## AEB endpoint (reference)
+
+`POST https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses`
+
+### Request shape 
+
+* `addresses[]` objects support (examples):
+
+  * `addressType`, `name`, `street`, `pc`, `city`, `district`, `countryISO`, `telNo`, `postbox`, `pcPostbox`, `cityPostbox`, `email`, `fax`, `name1..name4`, `title`, `surname`, `prenames`, `dateOfBirth`, `passportData`, `cityOfBirth`, `countryOfBirthISO`, `nationalityISO`, `position`, `niNumber`, `info`, `aliasGroupNo`, `free1..free7`, `referenceId`, `referenceComment`, `condition { value, description }`
+* `screeningParameters` supports:
+
+  * `clientIdentCode`, `profileIdentCode`, `threshold`, `clientSystemId`, `suppressLogging`, `considerGoodGuys`, `userIdentification`, `addressTypeVersion`
+
+> If your AEB field set differs, use the canonical spec provided in **{aeb_spec}**. Do not add fields not present there.
+
+## Output format (strict)
+
+1. A **Markdown table** with columns:
+   **Customer Data Field** | **AEB API Field** | **Explanation**
+
+   * Use `—` (em dash) if a column is “not applicable”.
+   * If a customer field maps to multiple AEB fields, add separate rows.
+   * If mapping requires a transform, explain it concretely (e.g., “split by comma; take first token as street”).
+2. **Unmapped / Needs Input**: bullet list of customer fields that you could not map, with 1-line reason each.
+3. **Assumptions**: numbered list of assumptions you made (keep minimal).
+4. **Clarifying Questions**: up to 5 short questions that would eliminate ambiguity.
+5. **Validation Notes**: brief reminders (e.g., batch ≤100, `countryISO` must be ISO-2 uppercase, entity vs person field rules).
+
+## Example
+
+
+
+## Rules (hard constraints)
+
+* **No hallucinations**. Only use:
+
+  * Customer fields provided in **{customer_schema}** (and/or **{customer_example}**).
+  * AEB fields provided in **{aeb_spec}**.
+* If a required AEB field has **no clear source**, put AEB field in the table with **Customer Data Field = `—`** and explain what is needed.
+* Prefer **simple, explicit transforms** (split, trim, concat). No vague “AI will infer”.
+* If input type is **entity/company**, **do not** map person-only fields (e.g., `surname`, `prenames`) unless the customer explicitly provides a person context.
+* Use **concise, implementation-ready language**.
+
+## Decision policy for ambiguous mappings
+
+* If multiple customer fields look plausible, **pick none** and move the field to **Clarifying Questions** rather than guessing.
+* If a customer field bundles multiple values (e.g., a full address), propose a deterministic transform and state it.
+* If a field looks like an ID/reference, prefer mapping to `referenceId` or `referenceComment` and explain why.
+
+## Style
+
+* Be concise, neutral, and technical.
+        """
     ))
 
     human = HumanMessage(content=f"""
-Analysiere die folgenden Kunden-API-Metadaten und erstelle ein detailliertes Mapping zur AEB TCM Screening API:
+Analyze the following customer API metadata and create a detailed mapping to the AEB TCM Screening API:
 
-**Kunden-API-Struktur:**
+**Customer API structure:**
+
 ```
-{user_input}
+{customer_api_content}
 ```
 
-**Verfügbare AEB Konfiguration:**
-- Test-Endpoint: {prov.get('test_endpoint', 'N/A')}
-- Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')} 
-- ClientIdentCode: {prov.get('clientIdentCode', 'N/A')}
-- WSM Benutzer konfiguriert: {('Ja' if prov.get('wsm_user_configured') else 'Nein' if prov.get('wsm_user_configured') is not None else 'Unbekannt')}
-- Systemname: {state.get('system_name', 'N/A')}
-- Prozess: {state.get('process', 'N/A')}
-- API-Metadaten: {state.get('api_metadata', 'N/A')}
+**Available AEB Configuration:**
 
-**Aufgabe:**
-1. **Feldmapping analysieren:** Identifiziere Kunden-Felder und weise sie AEB-Feldern zu
-2. **Transformationen vorschlagen:** Beschreibe notwendige Datenkonvertierungen
-3. **JSON-Beispiel generieren:** Erstelle ein vollständiges screenAddresses Request-Beispiel
-4. **Validierungsregeln:** Definiere Datenqualitätsprüfungen
-5. **Implementierungshinweise:** Gebe praktische Umsetzungstipps
+* Test endpoint: {prov.get('test_endpoint', 'N/A')}
+* Prod endpoint: {prov.get('prod_endpoint', 'N/A')}
+* ClientIdentCode: {prov.get('clientIdentCode', 'N/A')}
+* System name: {state.get('system_name', 'N/A')}
+* Process: {state.get('process', 'N/A')}
+* API metadata: {state.get('api_metadata', 'N/A')}
 
-**Berücksichtige AEB API Dokumentation:**
-{docs_snippets if docs_snippets else '[Keine Dokumentation verfügbar]'}
-**Berücksichtige die API Metadaten des Kunden:**
-{api_data_snippets if api_data_snippets else '[Keine Daten verfügbar]'}
-
-Strukturiere deine Antwort klar und praxisorientiert mit JSON-Beispielen.
 """)
 
-    resp = llm.invoke([sys, human])
+    resp = llm.invoke([sys, *messages, human])
 
     return {
         "messages": [resp]
@@ -742,26 +820,26 @@ def qa_mode_node(state: ApiMappingState) -> dict:
         context_info) if context_info else "Keine Konfigurationsdaten verfügbar."
 
     sys = SystemMessage(content=(
-        "Du bist ein AEB-Trade-Compliance API-Experte. "
-        "Beantworte Fragen zur TCM Screening API präzise und hilfreich auf Deutsch. "
-        "Nutze IMMER die verfügbaren Dokumentationsauszüge und Konfigurationsdaten. "
-        "Wenn Dokumentation verfügbar ist, basiere deine Antwort darauf und nicht auf allgemeinem Wissen."
+        "You are an AEB Trade Compliance API expert. "
+        "Answer questions about the TCM Screening API precisely and helpfully in English. "
+        "ALWAYS use the available documentation excerpts and configuration data. "
+        "If documentation is available, base your answer on it and not on general knowledge."
     ))
 
     snippets_text = "\n\n".join([f"Dokument {i+1}:\n{snippet}" for i, snippet in enumerate(
         snippets)]) if snippets else '[Keine passenden Dokumentationsauszüge gefunden]'
 
     human = HumanMessage(content=f"""
-Benutzerfrage: {question}
+User question: {question}
 
-Verfügbare Konfiguration:
+Available configuration:
 {context_str}
 
-Verfügbare Dokumentationsauszüge:
+Available documentation excerpts:
 {snippets_text}
 
-Beantworte die Frage basierend auf den verfügbaren Informationen. 
-WICHTIG: Nutze die Dokumentationsauszüge als primäre Quelle und verwende die korrekte API-Struktur aus der Dokumentation.
+Answer the question based on the available information. 
+IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
 """)
 
     resp = llm.invoke([sys, human])
