@@ -9,7 +9,7 @@ from agent.config import Config
 
 
 # Single LLM instance to be shared across the application
-llm = ChatOpenAI(model=Config.OPENAI_MODEL, temperature=0)
+_llm = None
 
 
 def get_llm() -> ChatOpenAI:
@@ -18,7 +18,10 @@ def get_llm() -> ChatOpenAI:
     Returns:
         ChatOpenAI: The configured LLM instance.
     """
-    return llm
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(model=Config.OPENAI_MODEL, temperature=0)
+    return _llm
 
 
 def create_custom_llm(model: str | None = None, temperature: float = 0) -> ChatOpenAI:
