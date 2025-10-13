@@ -85,7 +85,7 @@ def format_endpoints_message(found: ProvisioningState) -> List[str]:
     if found.get("test_endpoint"):
         lines.append(f"- Test: {found.get('test_endpoint', 'N/A')}")
     if found.get("prod_endpoint"):
-        lines.append(f"- Prod:  {found.get('prod_endpoint', 'N/A')}")
+        lines.append(f"- Prod:  {found.get('prod_endpoint', 'N/A')}  \n\n")
     if len(lines) == 1:
         lines.append(
             "Hinweis: Den zweiten Endpoint (Test/Prod) können Sie später ergänzen.")
