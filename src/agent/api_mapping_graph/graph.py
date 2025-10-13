@@ -1,6 +1,6 @@
 from __future__ import annotations
-from agent.api_mapping_graph.state import ApiMappingState
-from agent.api_mapping_graph.nodes import (
+from .state import ApiMappingState
+from .nodes import (
     NodeNames,
     api_mapping_intro_node,
     explain_responses_node,
@@ -21,7 +21,7 @@ from agent.api_mapping_graph.nodes import (
     get_api_data_interrupt_node,
     route_from_qa_mode
 )
-from agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
+from .decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
 from langgraph.graph import StateGraph, START, END
 
 
