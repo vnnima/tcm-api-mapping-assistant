@@ -1,6 +1,6 @@
 from __future__ import annotations
-from langgraph.graph import StateGraph, START, END
-from agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
+from pathlib import Path
+from agent.api_mapping_graph.state import ApiMappingState
 from agent.api_mapping_graph.nodes import (
     NodeNames,
     api_mapping_intro_node,
@@ -22,10 +22,14 @@ from agent.api_mapping_graph.nodes import (
     get_api_data_interrupt_node,
     route_from_qa_mode
 )
-from agent.api_mapping_graph.state import ApiMappingState
+from agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
+from langgraph.graph import StateGraph, START, END
 import sys
 import os
-from pathlib import Path
+# Add the src directory to Python path for proper imports
+sys.path.insert(0, os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), '..', '..'))
+
 
 # Add src directory to Python path to ensure imports work in LangGraph deployment
 current_dir = Path(__file__).parent
