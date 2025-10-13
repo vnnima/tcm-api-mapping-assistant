@@ -3,7 +3,6 @@ from agent.api_mapping_graph.state import ApiMappingState
 from agent.api_mapping_graph.nodes import (
     NodeNames,
     api_mapping_intro_node,
-    decision_interrupt_node,
     explain_responses_node,
     explain_screening_variants_node,
     intro_node,
@@ -19,10 +18,10 @@ from agent.api_mapping_graph.nodes import (
     route_from_endpoints,
     route_from_client,
     route_from_wsm,
-    route_from_decision_interrupt,
     get_api_data_interrupt_node,
     route_from_qa_mode
 )
+from agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
 from langgraph.graph import StateGraph, START, END
 
 
@@ -57,6 +56,7 @@ def build_graph():
         NodeNames.ASK_WSM: NodeNames.ASK_WSM,
         NodeNames.CLARIFY: NodeNames.CLARIFY,
         NodeNames.GENERAL_SCREENING_INFO: NodeNames.GENERAL_SCREENING_INFO,
+        NodeNames.PROCESS_AND_MAP_API: NodeNames.PROCESS_AND_MAP_API,
         "__end__": END
     })
     g.add_conditional_edges(NodeNames.CLARIFY, route_from_clarify, {
@@ -96,7 +96,7 @@ def build_graph():
     g.add_edge(NodeNames.EXPLAIN_RESPONSES, NodeNames.DECISION_INTERRUPT)
     g.add_edge(NodeNames.API_MAPPING_INTRO, NodeNames.GET_API_DATA_INTERRUPT)
     g.add_edge(NodeNames.GET_API_DATA_INTERRUPT, NodeNames.PROCESS_AND_MAP_API)
-    g.add_edge(NodeNames.PROCESS_AND_MAP_API, NodeNames.DECISION_INTERRUPT)
+    g.add_edge(NodeNames.PROCESS_AND_MAP_API, END)
 
     g.add_conditional_edges(NodeNames.QA_MODE, route_from_qa_mode, {
         NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,

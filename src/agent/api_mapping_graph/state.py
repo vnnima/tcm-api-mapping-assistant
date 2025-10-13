@@ -21,7 +21,7 @@ class ApiMappingState(TypedDict):
     # API Mapping Stuff
     system_name: str | None
     process: str | None
-    api_metadata: str | None
+    api_file_path: str | None
 
     started: bool
     completed: bool

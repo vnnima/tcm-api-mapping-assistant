@@ -70,7 +70,7 @@ def intro_node(state: ApiMappingState) -> dict:
             "messages": [
                 AIMessage(content=(
                     "Great! Let's start with the TCM Screening API integration. "
-                    "First, I need some information from you."
+                    "First, I need some information from you.\n\n"
                 ))
             ]
         }
@@ -81,7 +81,7 @@ def route_from_intro(state: ApiMappingState) -> str:
 
     # TODO: Can remove this when I implement the looping in qa_mode with interrupt
     if state.get("completed", False):
-        return NodeNames.QA_MODE
+        return NodeNames.PROCESS_AND_MAP_API
 
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
@@ -177,10 +177,10 @@ def ask_endpoints_node(state: ApiMappingState) -> dict:
             "messages": [
                 AIMessage(content=(
                     "Please first provide the **AEB RZ Endpoints** (at least one URL). "
-                    "These are required for API integration.\n"
+                    "These are required for API integration. "
                     f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
-                    "Format:\n"
-                    "Test: https://...\n"
+                    "Format:\n\n"
+                    "Test: https://...\n\n"
                     "Prod:  https://..."
                 ))
             ]
@@ -418,44 +418,9 @@ def general_screening_info_node(state: ApiMappingState) -> dict:
     }
 
 
-def decision_interrupt_node(state: ApiMappingState) -> dict:
-    payload = interrupt({
-        "type": "choice_or_question",
-        "prompt": "Press `continue` to proceed or ask your question.",
-    })
-
-    decision, question = None, None
-
-    if isinstance(payload, dict):
-        if payload.get("continue") is True or str(payload.get("continue")).lower() in {"true", "1", "yes"}:
-            decision = "continue"
-        elif "question" in payload:
-            decision = "qa"
-            question = str(payload["question"]).strip()
-    else:
-        raise ValueError(f"Unexpected interrupt payload type: {type(payload)}")
-
-    if decision is None:
-        decision = "qa"
-        question = (question or "").strip()
-
-    out = {"decision": decision, "pending_question": question}
-    if question:
-        out["messages"] = [HumanMessage(content=question)]
-    return out
-
-
-def route_from_decision_interrupt(state: ApiMappingState) -> str:
-    if state.get("decision") == "continue":
-        return state.get("next_node_after_qa", NodeNames.EXPLAIN_SCREENING_VARIANTS)
-    return NodeNames.QA_MODE
-
-
 def explain_screening_variants_node(state: ApiMappingState) -> dict:
     """Explain the three screening variants for API integration."""
     response_content = """
-# Basic Concept Compliance Screening
-
 ### Recommended Options for API Usage
 
 #### 1. One-Way Transfer Without Rechecks
@@ -603,14 +568,14 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
         "prompt": "Please provide your system name, process, and existing API metadata (e.g., JSON Schema, XML example, CSV structure, OpenAPI/Swagger definition).",
     })
 
-    system_name, process, api_metadata = None, None, None
+    system_name, process, api_file_path = None, None, None
     if isinstance(payload, dict):
         if payload.get("system_name"):
             system_name = str(payload["system_name"]).strip()
         if payload.get("process"):
             process = str(payload["process"]).strip()
         if payload.get("api_metadata"):
-            api_metadata = api_metadata  # This is the filename
+            api_file_path = payload.get("api_metadata")
     else:
         raise ValueError(f"Unexpected interrupt payload type: {type(payload)}")
 
@@ -619,8 +584,8 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
         out["system_name"] = system_name
     if process:
         out["process"] = process
-    if api_metadata:
-        out["api_metadata"] = api_metadata
+    if api_file_path:
+        out["api_file_path"] = api_file_path
     return out
 
 
@@ -628,12 +593,12 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
     """Process customer API metadata and generate mapping suggestions."""
     messages = state.get("messages", [])
     prov = state.get("provisioning", {})
-    api_data_filename = state.get("api_metadata", "")
-    if not api_data_filename:
+    api_file_path = state.get("api_file_path", "")
+    if not api_file_path:
         raise Exception(
-            "Api data has no filename. Something went wrong with storing it")
+            f"Api data has no filename. Something went wrong with storing it. Api metadata: {api_file_path}")
 
-    with open(Config.API_DATA_DIR / api_data_filename) as customer_data:
+    with open(Config.API_DATA_DIR / api_file_path) as customer_data:
         user_input = customer_data.read()
 
     # NOTE: Rebuild API data vectorstore fresh to only include current session's data
@@ -751,13 +716,13 @@ Analyze the following customer API metadata and create a detailed mapping to the
 * ClientIdentCode: {prov.get('clientIdentCode', 'N/A')}
 * System name: {state.get('system_name', 'N/A')}
 * Process: {state.get('process', 'N/A')}
-* API metadata: {state.get('api_metadata', 'N/A')}
-
+* API file path: {state.get('api_file_path', 'N/A')}
 """)
 
     resp = llm.invoke([sys, *messages, human])
 
     return {
+        "completed": True,
         "messages": [resp]
     }
 
