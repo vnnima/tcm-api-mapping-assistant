@@ -193,11 +193,23 @@ def build_index_fresh(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VEC
         clear_vectorstore(store_dir)
 
     root = Path(docs_dir)
-    store_dir.mkdir(parents=True, exist_ok=True)
+
+    # Ensure the store directory exists and is writable
+    try:
+        store_dir.mkdir(parents=True, exist_ok=True)
+        # Test write permissions by creating a temporary file
+        test_file = store_dir / "test_write"
+        test_file.write_text("test")
+        test_file.unlink()
+    except (PermissionError, OSError) as e:
+        print(f"[ERROR] Cannot write to directory {store_dir}: {e}")
+        print("Using fallback temporary directory...")
+        import tempfile
+        store_dir = Path(tempfile.mkdtemp(prefix="chroma_"))
+        print(f"Using fallback directory: {store_dir}")
 
     # Debug the knowledge base files first
     debug_knowledge_base_files(docs_dir)
-
 
     # Check if index already exists (unless we're clearing)
     if not clear_existing and _index_exists(store_dir):
@@ -255,15 +267,34 @@ def build_index_fresh(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VEC
     print(f"Building Chroma vectorstore at {store_dir}...")
 
     # Build or load persistent store, then add docs with stable ids (content hash)
-    vs = Chroma(persist_directory=str(store_dir),
-                embedding_function=_embedder())
+    try:
+        vs = Chroma(persist_directory=str(store_dir),
+                    embedding_function=_embedder())
+    except Exception as e:
+        print(f"[ERROR] Failed to create ChromaDB at {store_dir}: {e}")
+        # Try with a fresh temporary directory
+        import tempfile
+        store_dir = Path(tempfile.mkdtemp(prefix="chroma_fallback_"))
+        print(f"Retrying with fresh directory: {store_dir}")
+        vs = Chroma(persist_directory=str(store_dir),
+                    embedding_function=_embedder())
 
     # Chroma.add_texts allows ids, but raises on duplicates; since we only build once per process,
     # we can just add once here. If you call build_index repeatedly in the same process, hash IDs help.
     ids = [_hash_text(m["source"] + " :: " + t) for t, m in zip(texts, metas)]
 
     print(f"Adding {len(texts)} texts to vectorstore...")
-    vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+    try:
+        vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+    except Exception as e:
+        if "readonly database" in str(e).lower():
+            print(f"[ERROR] Database is readonly. Trying in-memory vector store...")
+            # Fallback to in-memory ChromaDB
+            vs = Chroma(embedding_function=_embedder())
+            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+            print(f"⚠️  Using in-memory vectorstore (data will not persist)")
+        else:
+            raise e
 
     print(f"✅ Successfully indexed {len(texts)} chunks → {store_dir}")
 
@@ -343,15 +374,34 @@ def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VECTOR_ST
     print(f"Building Chroma vectorstore at {store_dir}...")
 
     # Build or load persistent store, then add docs with stable ids (content hash)
-    vs = Chroma(persist_directory=str(store_dir),
-                embedding_function=_embedder())
+    try:
+        vs = Chroma(persist_directory=str(store_dir),
+                    embedding_function=_embedder())
+    except Exception as e:
+        print(f"[ERROR] Failed to create ChromaDB at {store_dir}: {e}")
+        # Try with a fresh temporary directory
+        import tempfile
+        store_dir = Path(tempfile.mkdtemp(prefix="chroma_fallback_"))
+        print(f"Retrying with fresh directory: {store_dir}")
+        vs = Chroma(persist_directory=str(store_dir),
+                    embedding_function=_embedder())
 
     # Chroma.add_texts allows ids, but raises on duplicates; since we only build once per process,
     # we can just add once here. If you call build_index repeatedly in the same process, hash IDs help.
     ids = [_hash_text(m["source"] + " :: " + t) for t, m in zip(texts, metas)]
 
     print(f"Adding {len(texts)} texts to vectorstore...")
-    vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+    try:
+        vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+    except Exception as e:
+        if "readonly database" in str(e).lower():
+            print(f"[ERROR] Database is readonly. Trying in-memory vector store...")
+            # Fallback to in-memory ChromaDB
+            vs = Chroma(embedding_function=_embedder())
+            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+            print(f"⚠️  Using in-memory vectorstore (data will not persist)")
+        else:
+            raise e
 
     print(f"✅ Successfully indexed {len(texts)} chunks → {store_dir}")
 
