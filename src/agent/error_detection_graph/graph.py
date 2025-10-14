@@ -1,10 +1,10 @@
 from __future__ import annotations
-from agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
+from langgraph.graph import StateGraph, START, END
 from agent.error_detection_graph.nodes import (
     chat_node,
     route_chat
 )
-from langgraph.graph import StateGraph, START, END
+from agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
 import sys
 import os
 from pathlib import Path
