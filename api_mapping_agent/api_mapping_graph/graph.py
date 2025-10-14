@@ -1,14 +1,6 @@
 from __future__ import annotations
-import sys
-import os
-
-# Add the root directory to Python path so imports work when loaded by LangGraph
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.join(current_dir, '..', '..')
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-
-from api_mapping_agent.api_mapping_graph.state import ApiMappingState
+from langgraph.graph import StateGraph, START, END
+from api_mapping_agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
 from api_mapping_agent.api_mapping_graph.nodes import (
     NodeNames,
     api_mapping_intro_node,
@@ -30,8 +22,7 @@ from api_mapping_agent.api_mapping_graph.nodes import (
     get_api_data_interrupt_node,
     route_from_qa_mode
 )
-from api_mapping_agent.api_mapping_graph.decision_interrupt_node import decision_interrupt_node, route_from_decision_interrupt
-from langgraph.graph import StateGraph, START, END
+from api_mapping_agent.api_mapping_graph.state import ApiMappingState
 
 
 def build_graph():

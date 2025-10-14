@@ -1,4 +1,12 @@
 from __future__ import annotations
+from langgraph.graph import StateGraph, START, END
+from api_mapping_agent.documentation_qna_graph.state import DocumentationQnaState, QnaNodeNames
+from api_mapping_agent.documentation_qna_graph.nodes import (
+    welcome_node,
+    answer_question_node,
+    route_from_welcome,
+    route_from_answer
+)
 import sys
 import os
 
@@ -7,15 +15,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 root_dir = os.path.join(current_dir, '..', '..')
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
-
-from api_mapping_agent.documentation_qna_graph.nodes import (
-    welcome_node,
-    answer_question_node,
-    route_from_welcome,
-    route_from_answer
-)
-from api_mapping_agent.documentation_qna_graph.state import DocumentationQnaState, QnaNodeNames
-from langgraph.graph import StateGraph, START, END
 
 
 def create_documentation_qna_graph() -> StateGraph:
