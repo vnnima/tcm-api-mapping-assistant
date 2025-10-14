@@ -42,4 +42,4 @@ def get_tcm_api_documentation_url(keyword: str = "") -> str:
         "https://rz3.aeb.de/test4ce/servlet/bf/doc/RiskAssessmentBF/de/aeb/xnsg/riskasmt/bf/IRiskAssessmentBF.html",
     }
 
-    return url_mappings[keyword_lower]
+    return url_mappings.get(keyword_lower, "No link found.")

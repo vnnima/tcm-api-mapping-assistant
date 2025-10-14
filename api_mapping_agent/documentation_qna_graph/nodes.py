@@ -132,8 +132,8 @@ Use clear structuring with Markdown formatting.
 
     except Exception as e:
         response_messages = [AIMessage(content=(
-            f"Entschuldigung, bei der Verarbeitung Ihrer Frage ist ein Fehler aufgetreten: {str(e)}\n\n"
-            "Bitte versuchen Sie es erneut oder formulieren Sie Ihre Frage anders."
+            f"Sorry, an error occurred while processing your question: {str(e)}  \n\n"
+            "Please try again or rephrase your question."
         ))]
 
     return {
