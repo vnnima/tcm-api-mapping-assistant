@@ -5,6 +5,15 @@ from agent.error_detection_graph.nodes import (
     route_chat
 )
 from langgraph.graph import StateGraph, START, END
+import sys
+import os
+from pathlib import Path
+
+# Add src directory to Python path to ensure imports work in LangGraph deployment
+current_dir = Path(__file__).parent
+src_dir = current_dir.parent.parent  # Go up to src directory
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 
 def create_error_detection_graph() -> StateGraph:
