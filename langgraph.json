@@ -1,6 +1,6 @@
 {
   "$schema": "https://langgra.ph/schema.json",
-  "dependencies": ["."],
+  "dependencies": ["./src"],
   "python_version": "3.13",
   "graphs": {
     "API Mapping Assistant": "./src/agent/api_mapping_graph/graph.py:api_mapping_graph",
