@@ -1,4 +1,13 @@
 from __future__ import annotations
+import sys
+import os
+
+# Add the root directory to Python path so imports work when loaded by LangGraph
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.join(current_dir, '..', '..')
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from api_mapping_agent.documentation_qna_graph.nodes import (
     welcome_node,
     answer_question_node,
