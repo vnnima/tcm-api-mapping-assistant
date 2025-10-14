@@ -1,0 +1,23 @@
+# Exclude unnecessary files but keep important data directories
+.git/
+.github/
+.vscode/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+node_modules/
+.env.local
+.env.*.local
+
+# Keep these important directories for the application
+!knowledge_base/
+!api_data/
+!vectorstore_min/
+!api_data_vectorstore/
+!static/

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 from api_mapping_agent.utils import get_latest_user_message, get_last_user_message
 from api_mapping_agent.llm import get_llm
 from .state import RequestValidationState, ValidationNodeNames
@@ -22,19 +23,19 @@ def get_request_node(state: RequestValidationState) -> Dict[str, Any]:
     if not messages:
         return {
             "messages": [
-            AIMessage(content=(
-                "# API Request Validation\n\n"
-                "I'll help you validate your API call for the AEB TCM Screening API.\n\n"
-                "**Please enter your API request:**\n"
-                "- In JSON format\n"
-                "- Complete request structure\n"
-                "- Example with real or test data\n\n"
-                "I will then check:\n"
-                "✅ Syntax and technical correctness\n"
-                "✅ Completeness of audit-relevant fields\n"
-                "✅ Professional quality of data fields\n"
-                "✅ Improvement suggestions for better hit processing"
-            ))
+                AIMessage(content=(
+                    "# API Request Validation\n\n"
+                    "I'll help you validate your API call for the AEB TCM Screening API.\n\n"
+                    "**Please enter your API request:**\n"
+                    "- In JSON format\n"
+                    "- Complete request structure\n"
+                    "- Example with real or test data\n\n"
+                    "I will then check:\n"
+                    "✅ Syntax and technical correctness\n"
+                    "✅ Completeness of audit-relevant fields\n"
+                    "✅ Professional quality of data fields\n"
+                    "✅ Improvement suggestions for better hit processing"
+                ))
             ]
         }
 
@@ -63,7 +64,10 @@ def validate_request_node(state: RequestValidationState) -> Dict[str, Any]:
 
     # Read the system prompt
     try:
-        with open("src/agent/request_validation_graph/system-prompt.txt", "r", encoding="utf-8") as f:
+        # Use relative path from the current file location
+        current_dir = Path(__file__).parent
+        system_prompt_path = current_dir / "system-prompt.txt"
+        with open(system_prompt_path, "r", encoding="utf-8") as f:
             system_prompt = f.read()
     except FileNotFoundError:
         system_prompt = (
@@ -140,7 +144,7 @@ def show_results_node(state: RequestValidationState) -> Dict[str, Any]:
     if not validation_results:
         return {
             "messages": [
-            AIMessage(content="❌ No validation results available.")
+                AIMessage(content="❌ No validation results available.")
             ],
             "completed": True
         }

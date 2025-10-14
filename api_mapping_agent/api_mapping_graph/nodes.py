@@ -7,8 +7,8 @@ from langgraph.graph import END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from enum import Enum
 from api_mapping_agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
-                         parse_wsm_user, parse_yes_no, has_endpoint_information,
-                         get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
+                                     parse_wsm_user, parse_yes_no, has_endpoint_information,
+                                     get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
 from api_mapping_agent.llm import get_llm
 from api_mapping_agent.config import Config
 from api_mapping_agent.rag import rag_search, build_index, ensure_index_built, debug_vectorstore_contents, debug_knowledge_base_files, build_index_fresh
@@ -571,14 +571,20 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
         "prompt": "Please provide your system name, process, and existing API metadata (e.g., JSON Schema, XML example, CSV structure, OpenAPI/Swagger definition).",
     })
 
-    system_name, process, api_file_path = None, None, None
+    system_name, process, api_filename, api_content = None, None, None, None
     if isinstance(payload, dict):
         if payload.get("system_name"):
             system_name = str(payload["system_name"]).strip()
         if payload.get("process"):
             process = str(payload["process"]).strip()
-        if payload.get("api_metadata"):
-            api_file_path = payload.get("api_metadata")
+        # Handle new payload structure with file content
+        if payload.get("api_metadata_filename") and payload.get("api_metadata_content"):
+            api_filename = payload.get("api_metadata_filename")
+            api_content = payload.get("api_metadata_content")
+        # Handle legacy payload structure with file path (for backwards compatibility)
+        elif payload.get("api_metadata"):
+            # This would be a path in legacy format
+            api_filename = payload.get("api_metadata")
     else:
         raise ValueError(f"Unexpected interrupt payload type: {type(payload)}")
 
@@ -587,8 +593,16 @@ def get_api_data_interrupt_node(state: ApiMappingState) -> dict:
         out["system_name"] = system_name
     if process:
         out["process"] = process
-    if api_file_path:
-        out["api_file_path"] = api_file_path
+    if api_filename and api_content:
+        # Save the content to a file in the backend's API data directory
+        Config.API_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        api_file_path = Config.API_DATA_DIR / api_filename
+        with open(api_file_path, "w", encoding="utf-8") as f:
+            f.write(api_content)
+        # Store just the filename, not full path
+        out["api_file_path"] = api_filename
+    elif api_filename:  # Legacy support
+        out["api_file_path"] = api_filename
     return out
 
 
@@ -601,12 +615,23 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
         raise Exception(
             f"Api data has no filename. Something went wrong with storing it. Api metadata: {api_file_path}")
 
-    with open(Config.API_DATA_DIR / api_file_path) as customer_data:
+    # Read the API data file with proper error handling
+    # api_file_path is now just the filename, construct the full path
+    api_data_file = Config.API_DATA_DIR / api_file_path
+    if not api_data_file.exists():
+        raise FileNotFoundError(f"API data file not found: {api_data_file}")
+
+    with open(api_data_file, encoding="utf-8") as customer_data:
         user_input = customer_data.read()
 
     # NOTE: Rebuild API data vectorstore fresh to only include current session's data
     # This prevents mixing API data from different customers/sessions
     print("🔄 Rebuilding API data vectorstore for current session only...")
+
+    # Ensure the API_DATA_DIR exists before trying to use it
+    Config.API_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    Config.API_DATA_VECTOR_STORE.mkdir(parents=True, exist_ok=True)
+
     build_index_fresh(Config.API_DATA_DIR.as_posix(),
                       Config.API_DATA_VECTOR_STORE, clear_existing=True)
 
@@ -817,6 +842,10 @@ def qa_mode_node(state: ApiMappingState) -> dict:
             "decision": "qa",
             "pending_question": "",
         }
+
+    # Ensure directories exist before building index
+    Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+    Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(parents=True, exist_ok=True)
 
     ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
                        Config.KNOWLEDGE_BASE_VECTOR_STORE)
