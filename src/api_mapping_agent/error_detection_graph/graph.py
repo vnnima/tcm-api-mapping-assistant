@@ -1,6 +1,6 @@
 from __future__ import annotations
-from agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
-from agent.error_detection_graph.nodes import (
+from api_mapping_agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
+from api_mapping_agent.error_detection_graph.nodes import (
     chat_node,
     route_chat
 )

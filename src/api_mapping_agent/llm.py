@@ -5,7 +5,7 @@ across all subgraphs and components, avoiding multiple initializations.
 """
 
 from langchain_openai import ChatOpenAI
-from agent.config import Config
+from api_mapping_agent.config import Config
 
 
 # Single LLM instance to be shared across the application

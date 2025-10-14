@@ -1,13 +1,13 @@
 from __future__ import annotations
-from agent.documentation_qna_graph.tools import get_tcm_api_documentation_url
-from agent.utils import get_latest_user_message
-from agent.rag import rag_search, ensure_index_built
-from agent.llm import get_llm
+from api_mapping_agent.documentation_qna_graph.tools import get_tcm_api_documentation_url
+from api_mapping_agent.utils import get_latest_user_message
+from api_mapping_agent.rag import rag_search, ensure_index_built
+from api_mapping_agent.llm import get_llm
 from .state import DocumentationQnaState, QnaNodeNames
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import END
-from agent.config import Config
+from api_mapping_agent.config import Config
 
 
 llm = get_llm().bind_tools([get_tcm_api_documentation_url])

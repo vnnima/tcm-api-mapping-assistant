@@ -1,11 +1,11 @@
 from __future__ import annotations
-from agent.documentation_qna_graph.nodes import (
+from api_mapping_agent.documentation_qna_graph.nodes import (
     welcome_node,
     answer_question_node,
     route_from_welcome,
     route_from_answer
 )
-from agent.documentation_qna_graph.state import DocumentationQnaState, QnaNodeNames
+from api_mapping_agent.documentation_qna_graph.state import DocumentationQnaState, QnaNodeNames
 from langgraph.graph import StateGraph, START, END
 
 

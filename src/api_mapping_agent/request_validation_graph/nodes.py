@@ -1,6 +1,6 @@
 from __future__ import annotations
-from agent.utils import get_latest_user_message, get_last_user_message
-from agent.llm import get_llm
+from api_mapping_agent.utils import get_latest_user_message, get_last_user_message
+from api_mapping_agent.llm import get_llm
 from .state import RequestValidationState, ValidationNodeNames
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage

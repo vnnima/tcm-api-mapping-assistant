@@ -34,6 +34,12 @@ packages = ["langgraph.templates.agent", "agent"]
 "agent" = "src/agent"
 
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
 [tool.setuptools.package-data]
 "*" = ["py.typed"]
 

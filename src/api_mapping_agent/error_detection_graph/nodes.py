@@ -1,12 +1,12 @@
 from __future__ import annotations
-from agent.utils import get_latest_user_message
-from agent.rag import rag_search, ensure_index_built
-from agent.llm import get_llm
+from api_mapping_agent.utils import get_latest_user_message
+from api_mapping_agent.rag import rag_search, ensure_index_built
+from api_mapping_agent.llm import get_llm
 from .state import ErrorDetectionState
 from typing import Dict, Any
 from langgraph.graph import END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, BaseMessage
-from agent.config import Config
+from api_mapping_agent.config import Config
 
 
 llm = get_llm()

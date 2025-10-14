@@ -7,7 +7,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter, RecursiveJsonSplitter, MarkdownTextSplitter
 from langchain_chroma import Chroma
 
-from agent.config import Config
+from api_mapping_agent.config import Config
 
 ALLOWED_EXTS = {".md", ".txt", ".json", ".yaml", ".yml"}
 

@@ -6,12 +6,12 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from enum import Enum
-from agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
+from api_mapping_agent.utils import (URL_RE, parse_client_ident, parse_endpoints,
                          parse_wsm_user, parse_yes_no, has_endpoint_information,
                          get_last_user_message, get_latest_user_message, get_last_assistant_message, format_endpoints_message)
-from agent.llm import get_llm
-from agent.config import Config
-from agent.rag import rag_search, build_index, ensure_index_built, debug_vectorstore_contents, debug_knowledge_base_files, build_index_fresh
+from api_mapping_agent.llm import get_llm
+from api_mapping_agent.config import Config
+from api_mapping_agent.rag import rag_search, build_index, ensure_index_built, debug_vectorstore_contents, debug_knowledge_base_files, build_index_fresh
 from .utils import get_screen_addresses_spec, get_general_information_about_screening_api
 
 

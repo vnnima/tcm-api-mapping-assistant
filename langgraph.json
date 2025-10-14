@@ -1,12 +1,12 @@
 {
   "$schema": "https://langgra.ph/schema.json",
-  "dependencies": ["."],
+  "dependencies": [".", "./src"],
   "python_version": "3.13",
   "graphs": {
-    "API Mapping Assistant": "./src/agent/api_mapping_graph/graph.py:api_mapping_graph",
-    "Request Validation Assistant": "./src/agent/request_validation_graph/graph.py:request_validation_graph",
-    "QnA Assistant": "./src/agent/documentation_qna_graph/graph.py:documentation_qna_graph",
-    "Error Detection Assistant": "./src/agent/error_detection_graph/graph.py:error_detection_graph"
+    "API Mapping Assistant": "./src/api_mapping_agent/api_mapping_graph/graph.py:api_mapping_graph",
+    "Request Validation Assistant": "./src/api_mapping_agent/request_validation_graph/graph.py:request_validation_graph",
+    "QnA Assistant": "./src/api_mapping_agent/documentation_qna_graph/graph.py:documentation_qna_graph",
+    "Error Detection Assistant": "./src/api_mapping_agent/error_detection_graph/graph.py:error_detection_graph"
   },
   "env": ".env",
   "image_distro": "wolfi"

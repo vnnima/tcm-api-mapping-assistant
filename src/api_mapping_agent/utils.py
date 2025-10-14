@@ -2,7 +2,7 @@ import re
 from typing import Dict, Optional, Sequence, List
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
-from agent.state import ProvisioningState
+from api_mapping_agent.state import ProvisioningState
 
 
 URL_RE = re.compile(r"https?://[^\s]+", re.I)
