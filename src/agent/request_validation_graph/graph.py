@@ -1,22 +1,12 @@
 from __future__ import annotations
-from langgraph.graph import StateGraph, START, END
-from agent.request_validation_graph.state import RequestValidationState, ValidationNodeNames
 from agent.request_validation_graph.nodes import (
     get_request_node,
     validate_request_node,
     show_results_node,
     route_from_get_request,
 )
-import sys
-import os
-from pathlib import Path
-
-# Add src directory to Python path to ensure imports work in LangGraph deployment
-current_dir = Path(__file__).parent
-src_dir = current_dir.parent.parent  # Go up to src directory
-if str(src_dir) not in sys.path:
-    sys.path.insert(0, str(src_dir))
-
+from agent.request_validation_graph.state import RequestValidationState, ValidationNodeNames
+from langgraph.graph import StateGraph, START, END
 
 def build_request_validation_graph():
     """Build the request validation subgraph."""

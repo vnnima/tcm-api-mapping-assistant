@@ -1,19 +1,10 @@
 from __future__ import annotations
-from langgraph.graph import StateGraph, START, END
+from agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
 from agent.error_detection_graph.nodes import (
     chat_node,
     route_chat
 )
-from agent.error_detection_graph.state import ErrorDetectionState, ErrorDetectionNodeNames
-import sys
-import os
-from pathlib import Path
-
-# Add src directory to Python path to ensure imports work in LangGraph deployment
-current_dir = Path(__file__).parent
-src_dir = current_dir.parent.parent  # Go up to src directory
-if str(src_dir) not in sys.path:
-    sys.path.insert(0, str(src_dir))
+from langgraph.graph import StateGraph, START, END
 
 
 def create_error_detection_graph() -> StateGraph:
