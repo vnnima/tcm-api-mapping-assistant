@@ -991,3 +991,454 @@ REST example in JSON:
 
 **Good Guy**: If the Compliance Screening check has returned a match, i.e., the checked business partner is similar to a restricted Party list entry according to the selected threshold value, then follow-up processing of a match is required. As a result of false positives (there is no identity between your checked business partner and the entry on the restricted party list), a good guy can be defined (with or without conditions). Good Guys are stored in Trade Compliance Management so that no new matches are reported during a follow-up check with the same business partner (identical name and address). With the parameter considerGoodGuys you can control whether good guys are used or not. If this Parameter is set to value false Good Guys will be ignored. If omitted or true, Good Guys will be considered. This parameter is optional and usually not needed as good guys should be reflected to avoid recurring efforts.
     """
+
+
+def get_api_examples() -> str:
+    return """
+    # API Examples
+
+## REST examples
+
+### 1. Person
+
+Example Request:
+
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'accept: application/json' \
+     --header 'authorization: Basic QVBJX1RFU1RAQVBJVEVTVDpBUElfVEVTVF8wMDc=' \
+     --header 'content-type: application/json' \
+     --data '
+
+{
+  "screeningParameters": {
+    "suppressLogging": false,
+    "addressTypeVersion": "1",
+    "clientIdentCode": "APITEST",
+    "clientSystemId": "Oracle Cloud ERP",
+    "profileIdentCode": "DEFAULT",
+    "userIdentification": "Oracle User 0815"
+  },
+
+  "addresses": [
+    {
+      "condition": {
+        "description": "Master data record 4711",
+        "value": "CUSTOMER_4711"
+      },
+      "referenceId": "CUS_4711",
+      "referenceComment": "Customer 4711",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "individual",
+      "name": "Abu Ahmed",
+      "street": "Newton street 5",
+      "pc": "M1 2AW",
+      "city": "Manchester",
+      "countryISO": "GB",
+      "district": "North West",
+      "telNo": "+4413859-489548",
+      "email": "abu.ahmed@example.com",
+      "postbox": "12345",
+      "pcPostbox": "MK7 6AJ",
+      "cityPostbox": "Manchester",
+      "surname": "Ahmed",
+      "prenames": "Abu",
+      "dateOfBirth": "1962",
+      "cityOfBirth": "Dublin",
+      "countryOfBirthISO": "IR",
+      "nationalityISO": "IR",
+      "position": "Senior Manager",
+      "info": "https://aebse.oracle.com/link/Customer/0012p00002topdCAAQ/view",
+      "ids": [
+        {
+          "idType": "PASSPORT_NO",
+          "idValue": "385948495849"
+        },
+        {
+          "idType": "DOMAIN_NAME",
+          "idValue": "abu.ahmed@example.com"
+        }
+      ],
+      "title": "Dr."
+    }
+  ]
+}
+```
+
+Example Response:
+
+```
+[
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "CUS_4711",
+    "referenceComment": "Customer 4711"
+  }
+
+]
+```
+
+### 2. Entity / Company
+
+Example Request:
+
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'accept: application/json' \
+     --header 'authorization: Basic QVBJX1RFU1RAQVBJVEVTVDpBUElfVEVTVF8wMDc=' \
+     --header 'content-type: application/json' \
+     --data '
+{
+  "screeningParameters": {
+    "suppressLogging": false,
+    "addressTypeVersion": "1",
+    "clientIdentCode": "APITEST",
+    "clientSystemId": "Oracle Cloud ERP",
+    "profileIdentCode": "DEFAULT",
+    "userIdentification": "Oracle User 0815"
+  },
+  "addresses": [
+    {
+      "condition": {
+        "description": "Master data record 4712",
+        "value": "CUSTOMER_4712"
+      },
+      "referenceId": "CUS_4712",
+      "referenceComment": "Customer 4712",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "entity",
+      "name": "Abu Ahmed Ltd.",
+      "street": "Newton street 5",
+      "pc": "M1 2AW",
+      "city": "Manchester",
+      "countryISO": "GB",
+      "district": "North West",
+      "telNo": "+4413859-489548",
+      "email": "abu.ahmed@example.com",
+      "postbox": "12345",
+      "pcPostbox": "MK7 6AJ",
+      "cityPostbox": "Manchester",
+      "name1": "Abu Ahmed",
+      "info": "https://aebse.oracle.com/link/Account/0012p00002topdCAAQ/view",
+      "ids": [
+        {
+          "idType": "DUNS_NO",
+          "idValue": "936078708"
+        },
+        {
+          "idType": "TAX_NO",
+          "idValue": "GB925485058"
+        }
+      ],
+      "name2": "Ltd."
+    }
+  ]
+}
+```
+
+Example Response:
+
+```
+[
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "CUS_4712",
+    "referenceComment": "Customer 4712"
+  }
+]
+```
+
+### 3. Means of Transport
+
+Example Request:
+
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'accept: application/json' \
+     --header 'authorization: Basic QVBJX1RFU1RAQVBJVEVTVDpBUElfVEVTVF8wMDc=' \
+     --header 'content-type: application/json' \
+     --data '
+{
+
+  "screeningParameters": {
+    "suppressLogging": false,
+    "addressTypeVersion": "1",
+    "clientIdentCode": "APITEST",
+    "clientSystemId": "Oracle Cloud ERP",
+    "profileIdentCode": "DEFAULT",
+    "userIdentification": "Oracle User 0815"
+  },
+
+  "addresses": [
+    {
+      "condition": {
+        "description": "Master data record 4713",
+        "value": "CARRIER_4713"
+      },
+      "referenceId": "CAR_4713",
+      "referenceComment": "Carrier 4713",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "meansOfTransport",
+      "name": "Andromeda",
+      "street": "18A pom. 7, ul. Pobedy",
+      "pc": "694620",
+      "city": "Kholmsk",
+      "countryISO": "RU",
+      "telNo": "+713859-489548",
+      "email": "info@carrier-ute.com",
+      "name1": "Andromeda",
+      "nationalityISO": "RU",
+      "info": "https://aebse.oracle.com/link/Carrier/0012p00002topdCAAQ/view",
+      "ids": [
+        {
+          "idType": "IMO_NO",
+          "idValue": "9118355"
+        },
+        {
+          "idType": "DOMAIN_NAME",
+          "idValue": "info@carrier-ute.com"
+        }
+      ]
+    }
+  ]
+
+}
+```
+
+Example Response:
+
+```
+[
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "CAR_4713",
+    "referenceComment": "Carrier 4713"
+  }
+]
+```
+
+### 4. Unknown Type
+
+Example Request:
+
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'accept: application/json' \
+     --header 'authorization: Basic QVBJX1RFU1RAQVBJVEVTVDpBUElfVEVTVF8wMDc=' \
+     --header 'content-type: application/json' \
+     --data '
+{
+
+  "screeningParameters": {
+    "suppressLogging": false,
+    "addressTypeVersion": "1",
+    "clientIdentCode": "APITEST",
+    "clientSystemId": "Oracle Cloud ERP",
+    "profileIdentCode": "DEFAULT",
+    "userIdentification": "Oracle User 0815"
+  },
+
+  "addresses": [
+    {
+      "condition": {
+        "description": "Master data record 4714",
+        "value": "VENDOR_4714"
+      },
+      "referenceId": "VEN_4714",
+      "referenceComment": "Vendor 4714",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "unknown",
+      "name": "Plant Zvezda - Scientific and Production Center of Automation and Instrumentation named after academician N.A. Pilyugin",
+      "street": "Vvedenskogo street 1",
+      "pc": "117342",
+      "city": "Moscow",
+      "countryISO": "RU",
+      "district": "North",
+      "telNo": "+713859-489548",
+      "email": "info@Plant-Zvezda.ru",
+      "postbox": "12345",
+      "pcPostbox": "117342",
+      "cityPostbox": "Moscow",
+      "name1": "Plant Zvezda",
+      "info": "https://aebse.oracle.com/link/Vendor/0012p00002topdCAAQ/view",
+      "ids": [
+        {
+          "idType": "BIC",
+          "idValue": "CBGURUMM"
+        },
+        {
+          "idType": "DOMAIN_NAME",
+          "idValue": "info@Plant-Zvezda.ru"
+        }
+      ],
+      "name2": "Scientific and Production Center of Automation and Instrumentation",
+      "name3": "named after academician N.A.",
+      "name4": "Pilyugin"
+    }
+  ]
+}
+```
+
+Example Response:
+
+```
+[
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "VEN_4714",
+    "referenceComment": "Vendor 4714"
+  }
+]
+```
+
+### 4. Transactional movement data (e.g order, deliveries, purchase orders)
+
+Example Request:
+
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'accept: application/json' \
+     --header 'authorization: Basic QVBJX1RFU1RAQVBJVEVTVDpBUElfVEVTVF8wMDc=' \
+     --header 'content-type: application/json' \
+     --data '
+{
+  "screeningParameters": {
+    "suppressLogging": false,
+    "addressTypeVersion": "1",
+    "clientIdentCode": "APITEST",
+    "clientSystemId": "Oracle Cloud ERP",
+    "profileIdentCode": "DEFAULT",
+    "userIdentification": "Oracle User 0815"
+  },
+  "addresses": [
+    {
+      "condition": {
+        "description": "Order 12560",
+        "value": "Order_12560"
+      },
+      "referenceId": "Order_12560_Consignee_4712",
+      "referenceComment": "Order 12560, Consignee 4712",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "entity",
+      "name": "Abu Ahmed Ltd.",
+      "street": "Newton street 5",
+      "pc": "M1 2AW",
+      "city": "Manchester",
+      "countryISO": "GB",
+      "district": "North West",
+      "telNo": "+4413859-489548",
+      "postbox": "12345",
+      "pcPostbox": "MK7 6AJ",
+      "cityPostbox": "Manchester",
+      "name1": "Abu Ahmed",
+      "info": "https://aebse.oracle.com/link/Order/0012p00002topdCAAQ/view",
+      "ids": [
+        {
+          "idType": "DUNS_NO",
+          "idValue": "936078708"
+        },
+        {
+          "idType": "TAX_NO",
+          "idValue": "GB925485058"
+        }
+      ],
+      "name2": "Ltd."
+    },
+    {
+      "condition": {
+        "value": "Order_12560",
+        "description": "Order 12560"
+      },
+      "referenceComment": "Order 12560, Payer 4715",
+      "referenceId": "Order_12560_Payer_4715",
+      "organisationUnitHost": "Sales DE",
+      "addressType": "entity",
+      "name": "Ascotec GmbH - AHWAZ STEEL Commercial & Technical Service",
+      "street": "Tersteegenstr. 10",
+      "pc": "40474",
+      "city": "Düsseldorf",
+      "countryISO": "DE",
+      "name2": "AHWAZ STEEL Commercial & Technical Service",
+      "name1": "Ascotec GmbH",
+      "ids": [
+        {
+          "idType": "DUNS_NO",
+          "idValue": "329918122"
+        },
+        {
+          "idType": "TAX_NO",
+          "idValue": "DE119371067"
+        },
+        {
+          "idType": "DOMAIN_NAME",
+          "idValue": "inbfo@ascotec.com"
+        }
+      ],
+      "telNo": "+49211-470520",
+      "info": "https://aebse.oracle.com/link/Order/0012p00002topdCAAQ/view"
+    },
+    {
+      "condition": {
+        "value": "Order_12560",
+        "description": "Order 12560"
+      },
+      "referenceComment": "Order 12560, Carrier 4716",
+      "referenceId": "Order_12560_Carrier_4716",
+      "addressType": "entity",
+      "organisationUnitHost": "Sales DE",
+      "name": "KARA Shipping and Chartering GmbH & Co. KG Special Road Transports International Division",
+      "name1": "KARA Shipping and Chartering GmbH",
+      "name2": "& Co. KG",
+      "name3": "Special Road Transports",
+      "name4": "International Division",
+      "street": "Schottweg 7",
+      "pc": "22087",
+      "city": "Hamburg",
+      "ids": [
+        {
+          "idType": "DUNS_NO",
+          "idValue": "507105000"
+        }
+      ],
+      "countryISO": "DE",
+      "info": "https://aebse.oracle.com/link/Order/0012p00002topdCAAQ/view"
+    }
+  ]
+}
+```
+
+Example Response:
+
+```
+[
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "Order_12560_Consignee_4712",
+    "referenceComment": "Order 12560, Consignee 4712"
+  },
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "Order_12560_Payer_4715",
+    "referenceComment": "Order 12560, Payer 4715"
+  },
+  {
+    "matchFound": true,
+    "wasGoodGuy": false,
+    "referenceId": "Order_12560_Carrier_4716",
+    "referenceComment": "Order 12560, Carrier 4716"
+  }
+
+]
+```
+"""
