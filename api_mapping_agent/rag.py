@@ -475,7 +475,7 @@ def rag_search(
                 search_kwargs={"k": k, "fetch_k": fetch_k,
                                "lambda_mult": lambda_mult},
             )
-            docs = retriever.get_relevant_documents(query)
+            docs = retriever.invoke(query)
         else:
             docs = vs.similarity_search(query, k=k)
 

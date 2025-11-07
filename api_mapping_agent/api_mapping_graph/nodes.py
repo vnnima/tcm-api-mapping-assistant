@@ -259,8 +259,8 @@ def ask_client_node(state: ApiMappingState) -> dict:
                 AIMessage(content=(
                     "2) **Client Name (clientIdentCode)**:\n"
                     "- A separate client is available for each customer.\n"
-                    "Please share your **clientIdentCode** (e.g. ACME01).\n\n"
-                    "Format: `clientIdentCode=ACME01` or `Client: ACME01`"
+                    "Please share your **clientIdentCode** (e.g. APITEST).\n\n"
+                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`"
                 ))
             ]
         }
@@ -275,8 +275,8 @@ def ask_client_node(state: ApiMappingState) -> dict:
                 AIMessage(content=(
                     "2) **Client Name (clientIdentCode)**:\n"
                     "- A separate client is available for each customer.\n"
-                    "Please share your **clientIdentCode** (e.g. ACME01).\n\n"
-                    "Format: `clientIdentCode=ACME01` or `Client: ACME01`"
+                    "Please share your **clientIdentCode** (e.g. APITEST).\n\n"
+                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`"
                 ))
             ]
         }
