@@ -8,7 +8,6 @@ from api_mapping_agent.api_mapping_graph.nodes import (
     explain_screening_variants_node,
     intro_node,
     clarify_node,
-    ask_endpoints_node,
     ask_client_node,
     ask_wsm_node,
     general_screening_info_node,
@@ -16,7 +15,6 @@ from api_mapping_agent.api_mapping_graph.nodes import (
     qa_mode_node,
     route_from_intro,
     route_from_clarify,
-    route_from_endpoints,
     route_from_client,
     route_from_wsm,
     get_api_data_interrupt_node,
@@ -33,7 +31,6 @@ def build_graph():
 
     g.add_node(NodeNames.INTRO, intro_node)
     g.add_node(NodeNames.CLARIFY, clarify_node)
-    g.add_node(NodeNames.ASK_ENDPOINTS, ask_endpoints_node)
     g.add_node(NodeNames.ASK_CLIENT, ask_client_node)
     g.add_node(NodeNames.ASK_WSM, ask_wsm_node)
     g.add_node(NodeNames.GENERAL_SCREENING_INFO, general_screening_info_node)
@@ -51,7 +48,6 @@ def build_graph():
 
     g.add_conditional_edges(NodeNames.INTRO, route_from_intro, {
         NodeNames.QA_MODE: NodeNames.QA_MODE,
-        NodeNames.ASK_ENDPOINTS: NodeNames.ASK_ENDPOINTS,
         NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
         NodeNames.ASK_WSM: NodeNames.ASK_WSM,
         NodeNames.CLARIFY: NodeNames.CLARIFY,
@@ -62,13 +58,7 @@ def build_graph():
     g.add_conditional_edges(NodeNames.CLARIFY, route_from_clarify, {
         NodeNames.CLARIFY: NodeNames.CLARIFY,
         NodeNames.INTRO: NodeNames.INTRO,
-        NodeNames.ASK_ENDPOINTS: NodeNames.ASK_ENDPOINTS,
         NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
-        "__end__": END
-    })
-    g.add_conditional_edges(NodeNames.ASK_ENDPOINTS, route_from_endpoints, {
-        NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
-        NodeNames.CLARIFY: NodeNames.CLARIFY,
         "__end__": END
     })
     g.add_conditional_edges(NodeNames.ASK_CLIENT, route_from_client, {

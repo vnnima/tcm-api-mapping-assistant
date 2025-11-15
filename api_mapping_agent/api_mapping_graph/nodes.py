@@ -18,7 +18,6 @@ from .utils import get_screen_addresses_spec, get_general_information_about_scre
 class NodeNames(str, Enum):
     INTRO = "intro"
     CLARIFY = "clarify"
-    ASK_ENDPOINTS = "ask_endpoints"
     ASK_CLIENT = "ask_client"
     ASK_WSM = "ask_wsm"
     GENERAL_SCREENING_INFO = "general_screening_info"
@@ -35,45 +34,60 @@ llm = get_llm()
 
 
 def intro_node(state: ApiMappingState) -> dict:
-    if state.get("completed", False):
-        return {}
-
     messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
-
-    if not user_input:
-        return {
-            "messages": [
-                AIMessage(content=(
-                    "Hello! I'm your **AEB API Mapping Assistant**. "
-                    "I help you cleanly integrate the **TCM Screening API** into your system.\n\n"
-                    "Would you like to start with the integration? (Yes/No)"
-                ))
-            ]
-        }
-
-    yn = parse_yes_no(user_input)
-    if yn is None:
-        return {}
-    if yn is False:
-        return {
-            "completed": True,
-            "messages": [
-                AIMessage(content=(
-                    "All right! If you need help with the TCM Screening API integration later, I'm happy to assist. "
-                    "Good luck!"
-                ))
-            ]
-        }
-    else:
+    # If there are no messages, it's the first turn.
+    # Greet the user and ask for endpoints.
+    if not messages:
         return {
             "started": True,
             "messages": [
                 AIMessage(content=(
-                    "Great! Let's start with the TCM Screening API integration. "
-                    "First, I need some information from you.\n\n"
+                    "Hello! I'm your **AEB API Mapping Assistant**. "
+                    "I help you cleanly integrate the **TCM Screening API** into your system.\n\n"
+                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
+                    "These are required for API integration. "
+                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
+                    "Format:  \n"
+                    "```\n"
+                    "Test: https://...  \n"
+                    "Prod:  https://...  \n"
+                    "```"
                 ))
             ]
+        }
+
+    # This part handles the user's response to the endpoint question.
+    user_input = get_latest_user_message(messages)
+    if not user_input:
+        # This case should ideally not be hit if the flow is correct
+        return {}
+
+    prov = state.get("provisioning", {})
+    found_endpoints = parse_endpoints(user_input)
+
+    # If exactly one URL and no prior endpoints, accept as test by default
+    single = URL_RE.findall(user_input)
+    if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
+        found_endpoints["test_endpoint"] = single[0]
+
+    # If user provided input but parsing failed, it will be handled by the router.
+    if not has_endpoint_information(prov) and not found_endpoints:
+        return {}
+
+    prov = {**prov, **found_endpoints}
+    lines = format_endpoints_message(found_endpoints)
+
+    if found_endpoints:
+        return {
+            "provisioning": prov,
+            "messages": [
+                AIMessage(content="Thank you! Endpoints recorded:\n" +
+                          "\n".join(lines))
+            ]
+        }
+    else:
+        return {
+            "provisioning": prov
         }
 
 
@@ -90,31 +104,20 @@ def route_from_intro(state: ApiMappingState) -> str:
     if not user_input:
         return END
 
-    if state.get("started", False):
-        prov = state.get("provisioning", {})
+    prov = state.get("provisioning", {})
 
-        if not has_endpoint_information(prov):
-            return NodeNames.ASK_ENDPOINTS
-
-        if not prov.get("clientIdentCode"):
-            return NodeNames.ASK_CLIENT
-
-        if "wsm_user_configured" not in prov:
-            return NodeNames.ASK_WSM
-
-        # All good -> guide
-        return NodeNames.GENERAL_SCREENING_INFO
-
-    # If user hasn't started yet, check their yes/no response
-    yn = parse_yes_no(user_input or "")
-
-    if yn is None:
+    # Check if we have endpoint information
+    if not has_endpoint_information(prov):
         return NodeNames.CLARIFY
-    elif yn is False:
-        # TODO: Add a node where we explain where to get this info from.
-        return END
-    else:
-        return NodeNames.ASK_ENDPOINTS
+
+    if not prov.get("clientIdentCode"):
+        return NodeNames.ASK_CLIENT
+
+    if "wsm_user_configured" not in prov:
+        return NodeNames.ASK_WSM
+
+    # All good -> guide
+    return NodeNames.GENERAL_SCREENING_INFO
 
 
 def clarify_node(state: ApiMappingState) -> dict:
@@ -160,90 +163,13 @@ def route_from_clarify(state: ApiMappingState) -> str:
     if not user_input:
         return END
     if not has_endpoint_information(prov):
-        return NodeNames.ASK_ENDPOINTS
+        return NodeNames.INTRO
     if not prov.get("clientIdentCode"):
         return NodeNames.ASK_CLIENT
     if "wsm_user_configured" not in prov:
         return NodeNames.ASK_WSM
     else:
         return NodeNames.INTRO
-
-
-def ask_endpoints_node(state: ApiMappingState) -> dict:
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
-
-    if not user_input:
-        return {
-            "messages": [
-                AIMessage(content=(
-                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
-                    "These are required for API integration. "
-                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
-                    "Format:  \n"
-                    "```\n"
-                    "Test: https://...  \n"
-                    "Prod:  https://...  \n"
-                    "```"
-                ))
-            ]
-        }
-
-    prov = state.get("provisioning", {})
-    found_endpoints = parse_endpoints(user_input)
-
-    # If exactly one URL and no prior endpoints, accept as test by default
-    single = URL_RE.findall(user_input)
-    if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
-        found_endpoints["test_endpoint"] = single[0]
-
-    # If user provided input but parsing failed, route to clarify
-    if not has_endpoint_information(prov) and not found_endpoints:
-        if user_input.strip():
-            return {}
-
-        # First time asking - show initial request
-        return {
-            "started": True,
-            "messages": [
-                AIMessage(content=(
-                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
-                    "These are required for API integration.\n"
-                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
-                    "Format:\n"
-                    "Test: https://...\n"
-                    "Prod:  https://..."
-                ))
-            ]
-        }
-
-    prov = {**prov, **found_endpoints}
-
-    lines = format_endpoints_message(found_endpoints)
-
-    return {
-        "started": True,
-        "provisioning": prov,
-        "messages": [
-            AIMessage(content="Thank you! Endpoints recorded:\n" +
-                      "\n".join(lines))
-        ]
-    }
-
-
-def route_from_endpoints(state: ApiMappingState) -> str:
-    """Route from endpoints based on current provisioning state."""
-    prov = state.get("provisioning", {})
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
-
-    if user_input.strip() and not has_endpoint_information(prov):
-        return NodeNames.CLARIFY
-
-    if not has_endpoint_information(prov):
-        return END
-
-    return NodeNames.ASK_CLIENT
 
 
 def ask_client_node(state: ApiMappingState) -> dict:
@@ -266,7 +192,46 @@ def ask_client_node(state: ApiMappingState) -> dict:
         }
 
     if user_input:
-        prov = {**prov, "clientIdentCode": parse_client_ident(user_input)}
+        parsed_client = parse_client_ident(user_input)
+
+        # If parsing failed, use LLM to understand user intent
+        if not parsed_client:
+            sys = SystemMessage(content=(
+                "You are helping analyze a user's response about their clientIdentCode. "
+                "The clientIdentCode is a unique identifier for each customer in the TCM Screening API. "
+                "Analyze the user's message and determine:\n"
+                "1. If they explicitly state they don't have a clientIdentCode (return 'no_code')\n"
+                "2. If they provided a code but it wasn't parsed (extract and return it)\n"
+                "3. If they're asking a question or unclear (return 'unclear')\n\n"
+                "Respond with ONLY ONE of:\n"
+                "- 'no_code' if they don't have one\n"
+                "- 'unclear' if you can't determine\n"
+                "- The actual code if you can extract it"
+            ))
+
+            human = HumanMessage(content=f"User's response: \"{user_input}\"")
+            llm_response = llm.invoke([sys, human])
+            llm_answer = str(llm_response.content).strip().lower()
+
+            if llm_answer == "no_code":
+                # User doesn't have a code, use fallback
+                prov = {**prov, "clientIdentCode": "APITEST"}
+                return {
+                    "provisioning": prov,
+                    "messages": confirmation_msgs + [
+                        AIMessage(content=(
+                            "No problem! I'll use **APITEST** as the default clientIdentCode for now. "
+                            "This is a standard test client that can be used for integration testing.\n\n"
+                            f"Client recorded: clientIdentCode=APITEST"
+                        ))
+                    ]
+                }
+            elif llm_answer != "unclear":
+                # LLM extracted a code
+                prov = {**prov, "clientIdentCode": llm_answer.upper()}
+            # If unclear, fall through to re-ask
+        else:
+            prov = {**prov, "clientIdentCode": parsed_client}
 
     if not prov.get("clientIdentCode"):
         return {
@@ -276,7 +241,8 @@ def ask_client_node(state: ApiMappingState) -> dict:
                     "2) **Client Name (clientIdentCode)**:\n"
                     "- A separate client is available for each customer.\n"
                     "Please share your **clientIdentCode** (e.g. APITEST).\n\n"
-                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`"
+                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`\n\n"
+                    "If you don't have a clientIdentCode yet, just let me know and I'll use a default test value."
                 ))
             ]
         }
@@ -307,22 +273,65 @@ def route_from_client(state: ApiMappingState) -> str:
 
 def ask_wsm_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
-    user_input = get_last_user_message(messages)
+    user_input = get_latest_user_message(messages)
     prov = state.get("provisioning", {})
 
-    # Try to parse WSM user status from input
-    is_wsm_configured = parse_wsm_user(user_input) if user_input else None
-    if is_wsm_configured is not None:
-        prov["wsm_user_configured"] = is_wsm_configured
-
-    if not prov.get("wsm_user_configured"):
+    if not user_input.strip():
         return {
             "provisioning": prov,
             "messages": [
                 AIMessage(content=(
                     "3) **WSM User for Authentication**:\n"
                     "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
-                    "Is this user already set up? (Yes/No)"
+                    "Is this user already set up? (Yes/No)\n\n"
+                    "If you don't have it yet, just let me know and we can continue without it for now."
+                ))
+            ]
+        }
+
+    # If parsing returned None but user provided input, use LLM to understand intent
+    if prov.get("wsm_user_configured") is None and user_input:
+        sys = SystemMessage(content=(
+            "You are helping analyze a user's response about their WSM user setup. "
+            "The WSM user is a technical user with credentials needed for API authentication. "
+            "Analyze the user's message and determine:\n"
+            "1. If they explicitly state they have it configured (return 'yes')\n"
+            "2. If they explicitly state they don't have it or need to set it up later (return 'no')\n"
+            "3. If they're asking a question or unclear (return 'unclear')\n\n"
+            "Respond with ONLY ONE word: 'yes', 'no', or 'unclear'"
+        ))
+
+        human = HumanMessage(content=f"User's response: \"{user_input}\"")
+        llm_response = llm.invoke([sys, human])
+        llm_answer = str(llm_response.content).strip().lower()
+
+        if llm_answer == "no":
+            # User doesn't have WSM user, set as not configured and continue
+            prov["wsm_user_configured"] = False
+            return {
+                "provisioning": prov,
+                "messages": [
+                    AIMessage(content=(
+                        "No worries! You can continue without the WSM user for now and set it up later. "
+                        "The WSM user credentials will be needed when you're ready to make live API calls.\n\n"
+                        "WSM user available: No"
+                    ))
+                ]
+            }
+        elif llm_answer == "yes":
+            prov["wsm_user_configured"] = True
+            is_wsm_configured = True
+        # If unclear, fall through to re-ask
+
+    if prov.get("wsm_user_configured") is None:
+        return {
+            "provisioning": prov,
+            "messages": [
+                AIMessage(content=(
+                    "3) **WSM User for Authentication**:\n"
+                    "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
+                    "Is this user already set up? (Yes/No)\n\n"
+                    "If you don't have it yet, just let me know and we can continue without it for now."
                 ))
             ]
         }
@@ -342,10 +351,10 @@ def route_from_wsm(state: ApiMappingState) -> str:
     messages = state.get("messages", [])
     user_input = get_latest_user_message(messages)
 
-    if user_input.strip() and not prov.get("wsm_user_configured"):
+    if user_input.strip() and prov.get("wsm_user_configured") is None:
         return NodeNames.CLARIFY
 
-    if not prov.get("wsm_user_configured"):
+    if prov.get("wsm_user_configured") is None:
         return END
 
     return NodeNames.GENERAL_SCREENING_INFO
@@ -830,8 +839,7 @@ def qa_mode_node(state: ApiMappingState) -> dict:
     if not question:
         payload = interrupt({
             "type": "question_or_continue",
-            "prompt": "Wie kann ich dir bei der TCM Screening API Integration helfen? "
-                      "Stelle deine Frage – oder schreibe `weiter`, um fortzufahren.",
+            "prompt": "Press `continue` to proceed or ask your question.",
         })
         if isinstance(payload, dict):
             if payload.get("continue") is True or str(payload.get("continue")).lower() in {"true", "1", "yes"}:
