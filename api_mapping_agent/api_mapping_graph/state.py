@@ -3,6 +3,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from typing import List, TypedDict, Annotated, Sequence
 
+
 class ProvisioningState(TypedDict, total=False):
     test_endpoint: str | None
     prod_endpoint: str | None
@@ -22,7 +23,11 @@ class ApiMappingState(TypedDict):
     system_name: str | None
     process: str | None
     api_file_path: str | None
-    
+
+    # Skip flags for information nodes
+    skip_general_info: bool
+    skip_screening_variants: bool
+    skip_responses: bool
 
     started: bool
     completed: bool

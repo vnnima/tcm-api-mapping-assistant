@@ -20,8 +20,11 @@ class NodeNames(str, Enum):
     CLARIFY = "clarify"
     ASK_CLIENT = "ask_client"
     ASK_WSM = "ask_wsm"
+    ASK_GENERAL_INFO = "ask_general_info"
     GENERAL_SCREENING_INFO = "general_screening_info"
+    ASK_SCREENING_VARIANTS = "ask_screening_variants"
     EXPLAIN_SCREENING_VARIANTS = "explain_screening_variants"
+    ASK_RESPONSES = "ask_responses"
     EXPLAIN_RESPONSES = "explain_responses"
     API_MAPPING_INTRO = "api_mapping_intro"
     DECISION_INTERRUPT = "decision_interrupt"
@@ -357,6 +360,29 @@ def route_from_wsm(state: ApiMappingState) -> str:
     if prov.get("wsm_user_configured") is None:
         return END
 
+    return NodeNames.ASK_GENERAL_INFO
+
+
+def ask_general_info_node(state: ApiMappingState) -> dict:
+    """Ask user if they want to see general screening information."""
+    payload = interrupt({
+        "type": "show_general_info",
+        "prompt": "Would you like to see the Initial Integration Guide for Sanctions List Screening? (Yes/No or Skip)",
+    })
+
+    skip = False
+    if isinstance(payload, dict):
+        response = str(payload.get("response", "")).strip().lower()
+        if response in {"no", "skip", "false", "0"}:
+            skip = True
+
+    return {"skip_general_info": skip}
+
+
+def route_from_ask_general_info(state: ApiMappingState) -> str:
+    """Route based on whether user wants to see general info."""
+    if state.get("skip_general_info", False):
+        return NodeNames.ASK_SCREENING_VARIANTS
     return NodeNames.GENERAL_SCREENING_INFO
 
 
@@ -426,8 +452,30 @@ def general_screening_info_node(state: ApiMappingState) -> dict:
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": NodeNames.EXPLAIN_SCREENING_VARIANTS,
     }
+
+
+def ask_screening_variants_node(state: ApiMappingState) -> dict:
+    """Ask user if they want to see screening variants explanation."""
+    payload = interrupt({
+        "type": "show_screening_variants",
+        "prompt": "Would you like to see the detailed Recommended Options for API Usage (3 integration variants)? (Yes/No or Skip)",
+    })
+
+    skip = False
+    if isinstance(payload, dict):
+        response = str(payload.get("response", "")).strip().lower()
+        if response in {"no", "skip", "false", "0"}:
+            skip = True
+
+    return {"skip_screening_variants": skip}
+
+
+def route_from_ask_screening_variants(state: ApiMappingState) -> str:
+    """Route based on whether user wants to see screening variants."""
+    if state.get("skip_screening_variants", False):
+        return NodeNames.ASK_RESPONSES
+    return NodeNames.EXPLAIN_SCREENING_VARIANTS
 
 
 def explain_screening_variants_node(state: ApiMappingState) -> dict:
@@ -489,8 +537,30 @@ This use case assumes that a user accesses the match handling directly from the 
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": NodeNames.EXPLAIN_RESPONSES,
     }
+
+
+def ask_responses_node(state: ApiMappingState) -> dict:
+    """Ask user if they want to see response scenarios explanation."""
+    payload = interrupt({
+        "type": "show_responses",
+        "prompt": "Would you like to see the detailed Response Scenarios explanation? (Yes/No or Skip)",
+    })
+
+    skip = False
+    if isinstance(payload, dict):
+        response = str(payload.get("response", "")).strip().lower()
+        if response in {"no", "skip", "false", "0"}:
+            skip = True
+
+    return {"skip_responses": skip}
+
+
+def route_from_ask_responses(state: ApiMappingState) -> str:
+    """Route based on whether user wants to see response scenarios."""
+    if state.get("skip_responses", False):
+        return NodeNames.API_MAPPING_INTRO
+    return NodeNames.EXPLAIN_RESPONSES
 
 
 def explain_responses_node(state: ApiMappingState) -> dict:
@@ -540,7 +610,6 @@ The third scenario detects an uncritical address due to a previous good guy defi
 
     return {
         "messages": [AIMessage(content=response_content)],
-        "next_node_after_qa": NodeNames.API_MAPPING_INTRO,
     }
 
 
