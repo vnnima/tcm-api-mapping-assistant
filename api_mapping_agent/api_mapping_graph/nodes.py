@@ -1051,7 +1051,19 @@ When generating mappings, provide:
 - `Check relevant field` -> Labeling whether yes or no
 - `Transformation info` -> should contain explanations as well as notes, e.g., if fields have been combined, such as address line 1 and address line 2 into one field for street name.
 - `Example` -> Field content either from the meta deta file uploaded by the user or from an example 
-4. **A complete REST request ** - Example API request with mapped data. The REST request must contain the request header and the body.
+4. **A complete REST request ** 
+- Example API request with mapped data. The REST request must contain the request header and the body.
+- You must also write a example request with a cURL syntax like this, where the headers and the links are included:
+```bash
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreening/screenAddresses \
+     --header 'X-XNSG_WEB_TOKEN: YOUR_TOKEN' \
+     --header 'accept: application/json' \
+     --header 'content-type: application/json' \
+     --data '
+```
+where you use the test-endpoint provided by the user as URL (Test endpoint: {prov.get('test_endpoint', 'N/A')})
+
 5. **Transformation Logic** - Code/pseudo-code for complex mappings
 6. **Validation & Quality Checks** - Recommended data validation
 7. **Implementation Notes** - Important considerations edge cases
@@ -1059,8 +1071,23 @@ When generating mappings, provide:
  
 
 ## Specification of mandatory, check relevant fields an optional fields for Field Mapping Table
-- Mantatory fields: `name` 
-- Check relevant fields: `name`, `name1`, `name2`,  `name3`, `name4`, `addressType`, `street`, `pc`, `city`, `countryISO`, `postbox`, `pcPostbox`, `condition` with `value` and `description` and `ids` with `idType` and `idValue`. 
+- Mantatory fields: 
+    - `name` -> ONLY the name field is mandatory.
+- Check relevant fields: 
+- `name` -> is check relevant AND mandatory
+- `name1` -> is check relevant
+- `name2` -> is check relevant
+- `name3` -> is check relevant
+- `name4` -> is check relevant
+- `addressType` -> is check relevant
+- `street` -> is check relevant
+- `pc` -> is check relevant
+- `city` -> is check relevant
+- `countryISO` -> is check relevant
+- `postbox` -> is check relevant
+- `pcPostbox` -> is check relevant
+- `condition` with `value` -> is check relevant
+- `description` and `ids` with `idType` and `idValue` -> are check relevant
 - Recommended optional fields: `referenceId`, `referenceComment`, `info`.
 
 ## Understanding Compliance Screening check
