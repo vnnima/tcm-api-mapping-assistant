@@ -129,7 +129,12 @@ def clarify_node(state: ApiMappingState) -> dict:
     user_input = get_last_user_message(messages)
 
     last_question = get_last_assistant_message(
-        messages) or "Would you like to start with the API mapping integration? (Yes/No)"
+        messages) or """
+Please first provide the AEB RZ Endpoints (at least one URL). These are required for API integration. Format:
+
+Test: https://...  
+Prod:  https://...  
+"""
     if not last_question:
         last_question = "a question"  # TODO: Handle this differently
 
@@ -145,12 +150,9 @@ The original question/prompt was:
 
 The user answered: "{user_input}"
 
-Analyze the response and explain kindly:
-1. What the problem with the answer is
-2. How they should answer correctly (with concrete examples)
-3. Then ask the question again
+Can you briefly and kindly explain what was missing or incorrect in their answer, and how they should answer correctly?
 
-Keep it brief, helpful and friendly.
+Keep the answer short.
 """)
 
     resp = llm.invoke([sys, human])
@@ -286,6 +288,7 @@ def ask_wsm_node(state: ApiMappingState) -> dict:
                 AIMessage(content=(
                     "3) **WSM User for Authentication**:\n"
                     "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
+                    "- [This documentation](https://trade-compliance.docs.developers.aeb.com/docs/setting-up-your-environment-1) provides more details about setting up the authentication and the different options"
                     "Is this user already set up? (Yes/No)\n\n"
                     "If you don't have it yet, just let me know and we can continue without it for now."
                 ))
@@ -367,23 +370,98 @@ def ask_general_info_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see general screening information."""
     payload = interrupt({
         "type": "show_general_info",
-        "prompt": "Would you like to see the Initial Integration Guide for Sanctions List Screening? (Yes/No or Skip)",
+        "title": "1. Initial Integration Guide for Sanctions List Screening",
+        "prompt": "Would you like to see the Initial Integration Guide for Sanctions List Screening? (Yes or Skip)",
     })
 
-    skip = False
-    if isinstance(payload, dict):
-        response = str(payload.get("response", "")).strip().lower()
-        if response in {"no", "skip", "false", "0"}:
-            skip = True
+    skip = None  # None means show content, True means skip, False means loop
+    messages_to_add = []
 
-    return {"skip_general_info": skip}
+    if isinstance(payload, dict):
+        # Check if user asked a question
+        if "question" in payload and payload["question"]:
+            question = str(payload["question"]).strip()
+
+            # Ensure indexes exist
+            Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(
+                parents=True, exist_ok=True)
+            ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                               Config.KNOWLEDGE_BASE_VECTOR_STORE)
+
+            # Get RAG snippets
+            snippets = rag_search(
+                f"Question about Screening API: {question}", k=5)
+
+            prov = state.get("provisioning", {})
+            context_info = []
+            if prov.get("test_endpoint"):
+                context_info.append(
+                    f"Test-Endpoint: {prov.get('test_endpoint', 'N/A')}")
+            if prov.get("prod_endpoint"):
+                context_info.append(
+                    f"Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')}")
+            if prov.get("clientIdentCode"):
+                context_info.append(
+                    f"Mandant (clientIdentCode): {prov.get('clientIdentCode', 'N/A')}")
+            if "wsm_user_configured" in prov:
+                wsm_status = "Yes" if prov["wsm_user_configured"] else "No"
+                context_info.append(f"WSM-User: {wsm_status}")
+
+            context_str = "\n".join(
+                context_info) if context_info else "No configuration data available."
+            snippets_text = "\n\n".join([f"Document {i+1}:\n{snippet}" for i, snippet in enumerate(
+                snippets)]) if snippets else '[No relevant documentation excerpts found]'
+
+            sys = SystemMessage(content=(
+                "You are an AEB Trade Compliance API expert. "
+                "Answer questions about the TCM Screening API precisely and helpfully in English. "
+                "ALWAYS use the available documentation excerpts and configuration data. "
+                "If documentation is available, base your answer on it and not on general knowledge."
+            ))
+
+            human = HumanMessage(content=f"""
+User question: {question}
+
+Available configuration:
+{context_str}
+
+Available documentation excerpts:
+{snippets_text}
+
+Answer the question based on the available information. 
+IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
+""")
+
+            resp = llm.invoke([sys, human])
+            messages_to_add.append(HumanMessage(content=question))
+            messages_to_add.append(resp)
+            # Loop back to ask again
+            skip = False
+
+        # Check if user wants to skip or show
+        elif "response" in payload:
+            response = str(payload.get("response", "")).strip().lower()
+            if response in {"no", "skip", "false", "0"}:
+                skip = True
+            elif response in {"yes", "show", "true", "1"}:
+                skip = None  # Show content
+
+    return {"skip_general_info": skip, "messages": messages_to_add}
 
 
 def route_from_ask_general_info(state: ApiMappingState) -> str:
     """Route based on whether user wants to see general info."""
-    if state.get("skip_general_info", False):
+    skip = state.get("skip_general_info")
+    if skip is True:
+        # User chose to skip
         return NodeNames.ASK_SCREENING_VARIANTS
-    return NodeNames.GENERAL_SCREENING_INFO
+    elif skip is False:
+        # Question was answered, loop back to ask again
+        return NodeNames.ASK_GENERAL_INFO
+    else:
+        # skip is None, show the content
+        return NodeNames.GENERAL_SCREENING_INFO
 
 
 def general_screening_info_node(state: ApiMappingState) -> dict:
@@ -459,23 +537,98 @@ def ask_screening_variants_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see screening variants explanation."""
     payload = interrupt({
         "type": "show_screening_variants",
-        "prompt": "Would you like to see the detailed Recommended Options for API Usage (3 integration variants)? (Yes/No or Skip)",
+        "title": "2. Recommended Options for API Usage",
+        "prompt": "Would you like to see the detailed Recommended Options for API Usage (3 integration variants)? (Yes or Skip)",
     })
 
-    skip = False
-    if isinstance(payload, dict):
-        response = str(payload.get("response", "")).strip().lower()
-        if response in {"no", "skip", "false", "0"}:
-            skip = True
+    skip = None  # None means show content, True means skip, False means loop
+    messages_to_add = []
 
-    return {"skip_screening_variants": skip}
+    if isinstance(payload, dict):
+        # Check if user asked a question
+        if "question" in payload and payload["question"]:
+            question = str(payload["question"]).strip()
+
+            # Ensure indexes exist
+            Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(
+                parents=True, exist_ok=True)
+            ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                               Config.KNOWLEDGE_BASE_VECTOR_STORE)
+
+            # Get RAG snippets
+            snippets = rag_search(
+                f"Question about Screening API: {question}", k=5)
+
+            prov = state.get("provisioning", {})
+            context_info = []
+            if prov.get("test_endpoint"):
+                context_info.append(
+                    f"Test-Endpoint: {prov.get('test_endpoint', 'N/A')}")
+            if prov.get("prod_endpoint"):
+                context_info.append(
+                    f"Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')}")
+            if prov.get("clientIdentCode"):
+                context_info.append(
+                    f"Mandant (clientIdentCode): {prov.get('clientIdentCode', 'N/A')}")
+            if "wsm_user_configured" in prov:
+                wsm_status = "Yes" if prov["wsm_user_configured"] else "No"
+                context_info.append(f"WSM-User: {wsm_status}")
+
+            context_str = "\n".join(
+                context_info) if context_info else "No configuration data available."
+            snippets_text = "\n\n".join([f"Document {i+1}:\n{snippet}" for i, snippet in enumerate(
+                snippets)]) if snippets else '[No relevant documentation excerpts found]'
+
+            sys = SystemMessage(content=(
+                "You are an AEB Trade Compliance API expert. "
+                "Answer questions about the TCM Screening API precisely and helpfully in English. "
+                "ALWAYS use the available documentation excerpts and configuration data. "
+                "If documentation is available, base your answer on it and not on general knowledge."
+            ))
+
+            human = HumanMessage(content=f"""
+User question: {question}
+
+Available configuration:
+{context_str}
+
+Available documentation excerpts:
+{snippets_text}
+
+Answer the question based on the available information. 
+IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
+""")
+
+            resp = llm.invoke([sys, human])
+            messages_to_add.append(HumanMessage(content=question))
+            messages_to_add.append(resp)
+            # Loop back to ask again
+            skip = False
+
+        # Check if user wants to skip or show
+        elif "response" in payload:
+            response = str(payload.get("response", "")).strip().lower()
+            if response in {"no", "skip", "false", "0"}:
+                skip = True
+            elif response in {"yes", "show", "true", "1"}:
+                skip = None  # Show content
+
+    return {"skip_screening_variants": skip, "messages": messages_to_add}
 
 
 def route_from_ask_screening_variants(state: ApiMappingState) -> str:
     """Route based on whether user wants to see screening variants."""
-    if state.get("skip_screening_variants", False):
+    skip = state.get("skip_screening_variants")
+    if skip is True:
+        # User chose to skip
         return NodeNames.ASK_RESPONSES
-    return NodeNames.EXPLAIN_SCREENING_VARIANTS
+    elif skip is False:
+        # Question was answered, loop back to ask again
+        return NodeNames.ASK_SCREENING_VARIANTS
+    else:
+        # skip is None, show the content
+        return NodeNames.EXPLAIN_SCREENING_VARIANTS
 
 
 def explain_screening_variants_node(state: ApiMappingState) -> dict:
@@ -544,23 +697,98 @@ def ask_responses_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see response scenarios explanation."""
     payload = interrupt({
         "type": "show_responses",
-        "prompt": "Would you like to see the detailed Response Scenarios explanation? (Yes/No or Skip)",
+        "title": "3. Response Scenarios Explanation",
+        "prompt": "Would you like to see the detailed Response Scenarios explanation? (Yes or Skip)",
     })
 
-    skip = False
-    if isinstance(payload, dict):
-        response = str(payload.get("response", "")).strip().lower()
-        if response in {"no", "skip", "false", "0"}:
-            skip = True
+    skip = None  # None means show content, True means skip, False means loop
+    messages_to_add = []
 
-    return {"skip_responses": skip}
+    if isinstance(payload, dict):
+        # Check if user asked a question
+        if "question" in payload and payload["question"]:
+            question = str(payload["question"]).strip()
+
+            # Ensure indexes exist
+            Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(
+                parents=True, exist_ok=True)
+            ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                               Config.KNOWLEDGE_BASE_VECTOR_STORE)
+
+            # Get RAG snippets
+            snippets = rag_search(
+                f"Question about Screening API: {question}", k=5)
+
+            prov = state.get("provisioning", {})
+            context_info = []
+            if prov.get("test_endpoint"):
+                context_info.append(
+                    f"Test-Endpoint: {prov.get('test_endpoint', 'N/A')}")
+            if prov.get("prod_endpoint"):
+                context_info.append(
+                    f"Prod-Endpoint: {prov.get('prod_endpoint', 'N/A')}")
+            if prov.get("clientIdentCode"):
+                context_info.append(
+                    f"Mandant (clientIdentCode): {prov.get('clientIdentCode', 'N/A')}")
+            if "wsm_user_configured" in prov:
+                wsm_status = "Yes" if prov["wsm_user_configured"] else "No"
+                context_info.append(f"WSM-User: {wsm_status}")
+
+            context_str = "\n".join(
+                context_info) if context_info else "No configuration data available."
+            snippets_text = "\n\n".join([f"Document {i+1}:\n{snippet}" for i, snippet in enumerate(
+                snippets)]) if snippets else '[No relevant documentation excerpts found]'
+
+            sys = SystemMessage(content=(
+                "You are an AEB Trade Compliance API expert. "
+                "Answer questions about the TCM Screening API precisely and helpfully in English. "
+                "ALWAYS use the available documentation excerpts and configuration data. "
+                "If documentation is available, base your answer on it and not on general knowledge."
+            ))
+
+            human = HumanMessage(content=f"""
+User question: {question}
+
+Available configuration:
+{context_str}
+
+Available documentation excerpts:
+{snippets_text}
+
+Answer the question based on the available information. 
+IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
+""")
+
+            resp = llm.invoke([sys, human])
+            messages_to_add.append(HumanMessage(content=question))
+            messages_to_add.append(resp)
+            # Loop back to ask again
+            skip = False
+
+        # Check if user wants to skip or show
+        elif "response" in payload:
+            response = str(payload.get("response", "")).strip().lower()
+            if response in {"no", "skip", "false", "0"}:
+                skip = True
+            elif response in {"yes", "show", "true", "1"}:
+                skip = None  # Show content
+
+    return {"skip_responses": skip, "messages": messages_to_add}
 
 
 def route_from_ask_responses(state: ApiMappingState) -> str:
     """Route based on whether user wants to see response scenarios."""
-    if state.get("skip_responses", False):
+    skip = state.get("skip_responses")
+    if skip is True:
+        # User chose to skip
         return NodeNames.API_MAPPING_INTRO
-    return NodeNames.EXPLAIN_RESPONSES
+    elif skip is False:
+        # Question was answered, loop back to ask again
+        return NodeNames.ASK_RESPONSES
+    else:
+        # skip is None, show the content
+        return NodeNames.EXPLAIN_RESPONSES
 
 
 def explain_responses_node(state: ApiMappingState) -> dict:
@@ -806,8 +1034,6 @@ Create comprehensive mappings that include:
 - Consider `condition` for context-specific good guys. The field `condition` with `description` and `value` must be included in each Field Mapping Table. 
 - The context for conditions of master data records (e.g. customer, vendor, employee, banks) is usually a combination of business object type and reference number that can be used as a condition (e.g `value` = customer_number,`description` = customer: number).
 - The usecase for conditions of transactional movement data (e.g. sales orders, deliveries, purchase oders, shipmemts) is the continuous applicability of a good guy for business objects that are related in a document flow (eg Quotation → Order → Delivery) so that the conditional exemption also applies to subsequent documents. It is common practice to derive the condition from the first document in the flow (e.g quotation oder sales order). Therefore, the field filling of the condition for transactional movement data should be a combination of business object type and reference number (e.g `value` = salesorder_number, `description` = sales order: number).
-____
-System-generated shipment number.
  
 ## Response Format
  

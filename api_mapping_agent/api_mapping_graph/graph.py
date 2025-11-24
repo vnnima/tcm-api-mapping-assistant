@@ -83,6 +83,7 @@ def build_graph():
     g.add_conditional_edges(NodeNames.ASK_GENERAL_INFO, route_from_ask_general_info, {
         NodeNames.GENERAL_SCREENING_INFO: NodeNames.GENERAL_SCREENING_INFO,
         NodeNames.ASK_SCREENING_VARIANTS: NodeNames.ASK_SCREENING_VARIANTS,
+        NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,  # Loop back for questions
     })
     g.add_edge(NodeNames.GENERAL_SCREENING_INFO,
                NodeNames.ASK_SCREENING_VARIANTS)
@@ -90,12 +91,15 @@ def build_graph():
     g.add_conditional_edges(NodeNames.ASK_SCREENING_VARIANTS, route_from_ask_screening_variants, {
         NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,
         NodeNames.ASK_RESPONSES: NodeNames.ASK_RESPONSES,
+        # Loop back for questions
+        NodeNames.ASK_SCREENING_VARIANTS: NodeNames.ASK_SCREENING_VARIANTS,
     })
     g.add_edge(NodeNames.EXPLAIN_SCREENING_VARIANTS, NodeNames.ASK_RESPONSES)
 
     g.add_conditional_edges(NodeNames.ASK_RESPONSES, route_from_ask_responses, {
         NodeNames.EXPLAIN_RESPONSES: NodeNames.EXPLAIN_RESPONSES,
         NodeNames.API_MAPPING_INTRO: NodeNames.API_MAPPING_INTRO,
+        NodeNames.ASK_RESPONSES: NodeNames.ASK_RESPONSES,  # Loop back for questions
     })
     g.add_edge(NodeNames.EXPLAIN_RESPONSES, NodeNames.API_MAPPING_INTRO)
     g.add_edge(NodeNames.API_MAPPING_INTRO, NodeNames.GET_API_DATA_INTERRUPT)
