@@ -930,25 +930,24 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
     with open(api_data_file, encoding="utf-8") as customer_data:
         user_input = customer_data.read()
 
-    # NOTE: Rebuild API data vectorstore fresh to only include current session's data
-    # This prevents mixing API data from different customers/sessions
-    print("🔄 Rebuilding API data vectorstore for current session only...")
-
-    # Ensure the API_DATA_DIR exists before trying to use it
-    Config.API_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    Config.API_DATA_VECTOR_STORE.mkdir(parents=True, exist_ok=True)
-
-    build_index_fresh(Config.API_DATA_DIR.as_posix(),
-                      Config.API_DATA_VECTOR_STORE, clear_existing=True)
-
     # Check if customer API data is too large for direct inclusion
     user_input_token_estimate = len(user_input) // 4 if user_input else 0
-
     MAX_DIRECT_INCLUSION_TOKENS = 100_000
 
+    # Only build vectorstore if we need RAG (file is large)
     if user_input_token_estimate > MAX_DIRECT_INCLUSION_TOKENS:
         print(
             f"Customer API data too large ({user_input_token_estimate} estimated tokens), using RAG search")
+        print("🔄 Building vectorstore for RAG search...")
+
+        # Ensure directories exist
+        Config.API_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        Config.API_DATA_VECTOR_STORE.mkdir(parents=True, exist_ok=True)
+
+        # Build vectorstore fresh to only include current session's data
+        build_index_fresh(Config.API_DATA_DIR.as_posix(),
+                          Config.API_DATA_VECTOR_STORE, clear_existing=True)
+
         # Use RAG search on customer data (now only contains current session's data)
         api_data_snippets = rag_search(
             "name, street, address, firstname, surname, entity, postbox, city, country, district", k=5,

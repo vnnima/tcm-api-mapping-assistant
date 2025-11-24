@@ -170,13 +170,33 @@ def clear_vectorstore(store_dir: Path):
     try:
         if store_dir.exists():
             import shutil
+            import time
             print(f"Clearing vectorstore at {store_dir}")
-            shutil.rmtree(store_dir)
-            print(f"✅ Vectorstore cleared: {store_dir}")
+
+            # On Windows, ChromaDB might hold file locks
+            # Try to delete, and if it fails, wait and retry
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    shutil.rmtree(store_dir, ignore_errors=False)
+                    print(f"✅ Vectorstore cleared: {store_dir}")
+                    break
+                except PermissionError as pe:
+                    if attempt < max_retries - 1:
+                        print(
+                            f"⚠️  File lock detected, waiting 1 second... (attempt {attempt + 1}/{max_retries})")
+                        time.sleep(1)
+                    else:
+                        print(
+                            f"⚠️  Could not clear vectorstore (file lock): {pe}")
+                        print(
+                            f"⚠️  Will create new vectorstore in temporary location")
+                        raise
         else:
             print(f"Vectorstore {store_dir} does not exist, nothing to clear")
     except Exception as e:
         print(f"Error clearing vectorstore {store_dir}: {e}")
+        raise
 
 
 def build_index_fresh(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VECTOR_STORE, clear_existing: bool = False):
@@ -284,14 +304,54 @@ def build_index_fresh(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VEC
     ids = [_hash_text(m["source"] + " :: " + t) for t, m in zip(texts, metas)]
 
     print(f"Adding {len(texts)} texts to vectorstore...")
+
+    # Estimate total tokens (rough estimate: 4 chars per token)
+    total_chars = sum(len(t) for t in texts)
+    estimated_tokens = total_chars // 4
+    # Conservative limit (OpenAI limit is 300k)
+    MAX_TOKENS_PER_REQUEST = 250000
+
+    # Only batch if estimated tokens exceed the limit
+    use_batching = estimated_tokens > MAX_TOKENS_PER_REQUEST
+
+    if use_batching:
+        print(
+            f"⚠️  Large dataset detected (~{estimated_tokens:,} tokens). Using batched processing...")
+        BATCH_SIZE = 100
+
     try:
-        vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+        if use_batching:
+            total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+            for i in range(0, len(texts), BATCH_SIZE):
+                batch_num = (i // BATCH_SIZE) + 1
+                batch_texts = texts[i:i + BATCH_SIZE]
+                batch_metas = metas[i:i + BATCH_SIZE]
+                batch_ids = ids[i:i + BATCH_SIZE]
+                print(
+                    f"  Adding batch {batch_num}/{total_batches} ({len(batch_texts)} texts)...")
+                vs.add_texts(texts=batch_texts,
+                             metadatas=batch_metas, ids=batch_ids)
+        else:
+            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
     except Exception as e:
         if "readonly database" in str(e).lower():
             print(f"[ERROR] Database is readonly. Trying in-memory vector store...")
             # Fallback to in-memory ChromaDB
             vs = Chroma(embedding_function=_embedder())
-            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+            # Retry with same batching strategy
+            if use_batching:
+                total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+                for i in range(0, len(texts), BATCH_SIZE):
+                    batch_num = (i // BATCH_SIZE) + 1
+                    batch_texts = texts[i:i + BATCH_SIZE]
+                    batch_metas = metas[i:i + BATCH_SIZE]
+                    batch_ids = ids[i:i + BATCH_SIZE]
+                    print(
+                        f"  Adding batch {batch_num}/{total_batches} ({len(batch_texts)} texts)...")
+                    vs.add_texts(texts=batch_texts,
+                                 metadatas=batch_metas, ids=batch_ids)
+            else:
+                vs.add_texts(texts=texts, metadatas=metas, ids=ids)
             print(f"⚠️  Using in-memory vectorstore (data will not persist)")
         else:
             raise e
@@ -391,14 +451,54 @@ def build_index(docs_dir: str, store_dir: Path = Config.KNOWLEDGE_BASE_VECTOR_ST
     ids = [_hash_text(m["source"] + " :: " + t) for t, m in zip(texts, metas)]
 
     print(f"Adding {len(texts)} texts to vectorstore...")
+
+    # Estimate total tokens (rough estimate: 4 chars per token)
+    total_chars = sum(len(t) for t in texts)
+    estimated_tokens = total_chars // 4
+    # Conservative limit (OpenAI limit is 300k)
+    MAX_TOKENS_PER_REQUEST = 250000
+
+    # Only batch if estimated tokens exceed the limit
+    use_batching = estimated_tokens > MAX_TOKENS_PER_REQUEST
+
+    if use_batching:
+        print(
+            f"⚠️  Large dataset detected (~{estimated_tokens:,} tokens). Using batched processing...")
+        BATCH_SIZE = 100
+
     try:
-        vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+        if use_batching:
+            total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+            for i in range(0, len(texts), BATCH_SIZE):
+                batch_num = (i // BATCH_SIZE) + 1
+                batch_texts = texts[i:i + BATCH_SIZE]
+                batch_metas = metas[i:i + BATCH_SIZE]
+                batch_ids = ids[i:i + BATCH_SIZE]
+                print(
+                    f"  Adding batch {batch_num}/{total_batches} ({len(batch_texts)} texts)...")
+                vs.add_texts(texts=batch_texts,
+                             metadatas=batch_metas, ids=batch_ids)
+        else:
+            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
     except Exception as e:
         if "readonly database" in str(e).lower():
             print(f"[ERROR] Database is readonly. Trying in-memory vector store...")
             # Fallback to in-memory ChromaDB
             vs = Chroma(embedding_function=_embedder())
-            vs.add_texts(texts=texts, metadatas=metas, ids=ids)
+            # Retry with same batching strategy
+            if use_batching:
+                total_batches = (len(texts) + BATCH_SIZE - 1) // BATCH_SIZE
+                for i in range(0, len(texts), BATCH_SIZE):
+                    batch_num = (i // BATCH_SIZE) + 1
+                    batch_texts = texts[i:i + BATCH_SIZE]
+                    batch_metas = metas[i:i + BATCH_SIZE]
+                    batch_ids = ids[i:i + BATCH_SIZE]
+                    print(
+                        f"  Adding batch {batch_num}/{total_batches} ({len(batch_texts)} texts)...")
+                    vs.add_texts(texts=batch_texts,
+                                 metadatas=batch_metas, ids=batch_ids)
+            else:
+                vs.add_texts(texts=texts, metadatas=metas, ids=ids)
             print(f"⚠️  Using in-memory vectorstore (data will not persist)")
         else:
             raise e
