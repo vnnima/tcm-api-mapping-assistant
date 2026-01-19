@@ -44,88 +44,72 @@ def intro_node(state: ApiMappingState) -> dict:
     welcome_msgs = []
 
     # If there's an explicit resume flag for ask_endpoints, handle it immediately
-    if state.get("resume_after_qa") == "ask_endpoints" and not has_endpoint_information(prov):
-        endpoints_payload = interrupt({
-            "type": "ask_endpoints",
-            "title": "Step 1: AEB RZ Endpoints",
-            "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
-        })
+    def _handle_endpoints_payload(endpoints_payload, welcome_msgs=None):
+        """Process a payload returned from an `ask_endpoints` interrupt.
 
-        if isinstance(endpoints_payload, dict):
-            # If structured endpoint fields were submitted, accept them
-            if "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
-                test_url = str(endpoints_payload.get("test_url", "")).strip()
-                prod_url = str(endpoints_payload.get("prod_url", "")).strip()
-                found_endpoints = {}
-                if test_url:
-                    found_endpoints["test_endpoint"] = test_url
-                if prod_url:
-                    found_endpoints["prod_endpoint"] = prod_url
+        Returns a state-delta dict if the payload contains data to consume, or
+        None to indicate the interrupt should be shown (no consumption).
+        """
+        if not isinstance(endpoints_payload, dict):
+            return None
 
-                if found_endpoints:
-                    return {
-                        "provisioning": found_endpoints,
-                        "decision": None,
-                        "started": False,
-                        "resume_after_qa": None,
-                        "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
-                    }
+        # Structured fields
+        if "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
+            test_url = str(endpoints_payload.get("test_url", "")).strip()
+            prod_url = str(endpoints_payload.get("prod_url", "")).strip()
+            found_endpoints = {}
+            if test_url:
+                found_endpoints["test_endpoint"] = test_url
+            if prod_url:
+                found_endpoints["prod_endpoint"] = prod_url
 
-            # If user supplied free-text endpoints
-            if "endpoints" in endpoints_payload:
-                endpoints_text = str(endpoints_payload["endpoints"]).strip()
-                found_endpoints = parse_endpoints(endpoints_text)
-                if found_endpoints:
-                    return {
-                        "provisioning": found_endpoints,
-                        "decision": None,
-                        "started": False,
-                        "resume_after_qa": None,
-                        "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
-                    }
-
-            # Check for question
-            if "question" in endpoints_payload and endpoints_payload["question"]:
-                question = str(endpoints_payload["question"]).strip()
+            if found_endpoints:
                 return {
-                    "pending_question": question,
-                    "decision": "qa",
-                    "next_node_after_qa": NodeNames.INTRO,
-                    "resume_after_qa": "ask_endpoints",
-                    "messages": [HumanMessage(content=question)]
+                    "provisioning": found_endpoints,
+                    "decision": None,
+                    "started": False,
+                    "resume_after_qa": None,
+                    "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
                 }
 
-            # Check for skip
-            if "response" in endpoints_payload:
-                response = str(endpoints_payload.get(
-                    "response", "")).strip().lower()
-                if response in {"skip", "no", "false", "0"}:
-                    return {
-                        "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
-                        "decision": None,
-                        "started": False,
-                        "resume_after_qa": None,
-                        "messages": [AIMessage(content="Using default endpoints. You can update these later if needed.")]
-                    }
+        # Free-text endpoints
+        if "endpoints" in endpoints_payload:
+            endpoints_text = str(endpoints_payload["endpoints"]).strip()
+            found_endpoints = parse_endpoints(endpoints_text)
+            if found_endpoints:
+                return {
+                    "provisioning": found_endpoints,
+                    "decision": None,
+                    "started": False,
+                    "resume_after_qa": None,
+                    "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
+                }
 
-        # Otherwise show the endpoints interrupt prompt
-        return {
-            "started": True,
-            "decision": None,
-            "resume_after_qa": None,
-            "messages": [AIMessage(content=(
-                "**Step 1: AEB RZ Endpoints**\n\n"
-                "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                "Please enter these in the input below to proceed to the next step.\n\n"
-                "**Format:**\n"
-                "```\n"
-                "Test: https://...  \n"
-                "Prod: https://...  \n"
-                "```\n\n"
-                "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
-            ))]
-        }
+        # Direct question from the ask_endpoints UI
+        if "question" in endpoints_payload and endpoints_payload["question"]:
+            question = str(endpoints_payload["question"]).strip()
+            return {
+                "pending_question": question,
+                "decision": "qa",
+                "next_node_after_qa": NodeNames.INTRO,
+                "resume_after_qa": "ask_endpoints",
+                "messages": [HumanMessage(content=question)]
+            }
+
+        # Skip/default
+        if "response" in endpoints_payload:
+            response = str(endpoints_payload.get(
+                "response", "")).strip().lower()
+            if response in {"skip", "no", "false", "0"}:
+                return {
+                    "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
+                    "decision": None,
+                    "started": False,
+                    "resume_after_qa": None,
+                    "messages": [AIMessage(content="Using default endpoints. You can update these later if needed.")]
+                }
+
+        return None
 
     # Debug: log incoming resume flag and provisioning briefly
     try:
@@ -143,195 +127,56 @@ def intro_node(state: ApiMappingState) -> dict:
                 "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
             })
 
-            if isinstance(endpoints_payload, dict):
-                # Check if user asked a question
-                if "question" in endpoints_payload and endpoints_payload["question"]:
-                    question = str(endpoints_payload["question"]).strip()
-                    return {
-                        "pending_question": question,
-                        "decision": "qa",
-                        "next_node_after_qa": NodeNames.INTRO,
-                        "resume_after_qa": "ask_endpoints",
-                        "messages": [HumanMessage(content=question)]
-                    }
-                # Check if user wants to skip
-                elif "response" in endpoints_payload:
-                    response = str(endpoints_payload.get(
-                        "response", "")).strip().lower()
-                    if response in {"skip", "no", "false", "0"}:
-                        # Use default endpoints
-                        return {
-                            "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
-                            "decision": None,  # Clear decision
-                            "started": False,
-                            "resume_after_qa": None,
-                            "messages": [
-                                AIMessage(
-                                    content="Using default endpoints. You can update these later if needed.")
-                            ]
-                        }
-                # If user provided test_url/prod_url via the structured inputs
-                elif "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
-                    test_url = str(endpoints_payload.get(
-                        "test_url", "")).strip()
-                    prod_url = str(endpoints_payload.get(
-                        "prod_url", "")).strip()
+            out = _handle_endpoints_payload(endpoints_payload)
+            if out is not None:
+                return out
 
-                    found_endpoints = {}
-                    if test_url:
-                        found_endpoints["test_endpoint"] = test_url
-                    if prod_url:
-                        found_endpoints["prod_endpoint"] = prod_url
-
-                    if found_endpoints:
-                        return {
-                            "provisioning": found_endpoints,
-                            "decision": None,  # Clear decision
-                            "started": False,
-                            "resume_after_qa": None,
-                            "messages": [
-                                AIMessage(content="Thank you! Endpoints recorded:\n" +
-                                          "\n".join(format_endpoints_message(found_endpoints)))
-                            ]
-                        }
-                # If user provided endpoint data directly
-                elif "endpoints" in endpoints_payload:
-                    endpoints_text = str(
-                        endpoints_payload["endpoints"]).strip()
-                    found_endpoints = parse_endpoints(endpoints_text)
-                    if found_endpoints:
-                        return {
-                            "provisioning": found_endpoints,
-                            "decision": None,  # Clear decision
-                            "started": False,
-                            "resume_after_qa": None,
-                            "messages": [
-                                AIMessage(content="Thank you! Endpoints recorded:\n" +
-                                          "\n".join(format_endpoints_message(found_endpoints)))
-                            ]
-                        }
-
-            # If we get here, show the endpoint prompt with started flag
+            # Show endpoint prompt
             return {
                 "started": True,
-                "decision": None,  # Clear decision
+                "decision": None,
                 "resume_after_qa": None,
-                "messages": [
-                    AIMessage(content=(
-                        "**Step 1: AEB RZ Endpoints**\n\n"
-                        "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                        "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                        "Please enter these in the input below to proceed to the next step.\n\n"
-                        "**Format:**\n"
-                        "```\n"
-                        "Test: https://...  \n"
-                        "Prod: https://...  \n"
-                        "```\n\n"
-                        "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
-                    ))
-                ]
+                "messages": [AIMessage(content=(
+                    "**Step 1: AEB RZ Endpoints**\n\n"
+                    "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                    "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                    "Please enter these in the input below to proceed to the next step.\n\n"
+                    "**Format:**\n"
+                    "```\n"
+                    "Test: https://...  \n"
+                    "Prod: https://...  \n"
+                    "```\n\n"
+                    "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                ))]
             }
 
     # Only trigger the start interrupt on the very first run (no messages at all)
     if not messages:
-        # Show welcome message if this is the first time
-        welcome_msgs = []
-        if not messages:
-            welcome_msgs = [
-                AIMessage(content=(
-                    "Welcome to the **API Mapping Assistant**. This assistant guides you step by step through all the relevant steps required to technically connect your partner or host system to Compliance Screening via an API.\n\n"
-                    "Additionally you can ask me general questions about the integration or the API during each step."
-                ))
-            ]
+        welcome_msgs = [AIMessage(content=(
+            "Welcome to the **API Mapping Assistant**. This assistant guides you step by step through all the relevant steps required to technically connect your partner or host system to Compliance Screening via an API.\n\n"
+            "Please press Start to begin; all configuration inputs will be collected via the form controls that appear next."))]
 
         payload = interrupt({
             "type": "start_or_question",
-            "prompt": "Press 'Start' to begin the integration process or type a question below.",
+            "prompt": "Press 'Start' to begin the integration process.",
         })
 
-        if isinstance(payload, dict):
-            if payload.get("decision") == "start" or payload.get("start") is True or str(payload.get("start", "")).lower() in {"true", "1", "yes", "start"}:
-                # User wants to start the guide - now ask for endpoints via interrupt
-                endpoints_payload = interrupt({
-                    "type": "ask_endpoints",
-                    "title": "Step 1: AEB RZ Endpoints",
-                    "prompt": "Please provide the AEB RZ Endpoints.",
-                })
+        # If the interrupt was consumed (resume), and user chose Start, show the endpoints interrupt
+        if isinstance(payload, dict) and (payload.get("decision") == "start" or payload.get("start") is True or str(payload.get("start", "")).lower() in {"true", "1", "yes", "start"}):
+            endpoints_payload = interrupt({
+                "type": "ask_endpoints",
+                "title": "Step 1: AEB RZ Endpoints",
+                "prompt": "Please provide the AEB RZ Endpoints.",
+            })
 
-                if isinstance(endpoints_payload, dict):
-                    # Check if user asked a question
-                    if "question" in endpoints_payload and endpoints_payload["question"]:
-                        question = str(endpoints_payload["question"]).strip()
-                        return {
-                            "pending_question": question,
-                            "decision": "qa",
-                            "next_node_after_qa": NodeNames.INTRO,
-                            "resume_after_qa": "ask_endpoints",
-                            "messages": welcome_msgs + [HumanMessage(content=question)]
-                        }
-                    # If user provided test_url and prod_url
-                    elif "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
-                        test_url = str(endpoints_payload.get(
-                            "test_url", "")).strip()
-                        prod_url = str(endpoints_payload.get(
-                            "prod_url", "")).strip()
+            out = _handle_endpoints_payload(endpoints_payload, welcome_msgs)
+            if out is not None:
+                return out
 
-                        found_endpoints = {}
-                        if test_url:
-                            found_endpoints["test_endpoint"] = test_url
-                        if prod_url:
-                            found_endpoints["prod_endpoint"] = prod_url
-
-                        if found_endpoints:
-                            return {
-                                "provisioning": found_endpoints,
-                                "started": False,
-                                "messages": welcome_msgs + [
-                                    AIMessage(content="Thank you! Endpoints recorded:\n" +
-                                              "\n".join(format_endpoints_message(found_endpoints)))
-                                ]
-                            }
-
-                # If we get here, show the endpoint prompt with started flag
-                return {
-                    "started": True,
-                    "messages": welcome_msgs + [
-                        AIMessage(content=(
-                            "Great! Let's get started with the integration.\n\n"
-                            "**Step 1: AEB RZ Endpoints**\n\n"
-                            "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                            "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                            "Please enter these in the input below to proceed to the next step.\n\n"
-                            "**Format:**\n"
-                            "```\n"
-                            "Test: https://...  \n"
-                            "Prod: https://...  \n"
-                            "```\n\n"
-                            "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
-                        ))
-                    ]
-                }
-            elif payload.get("decision") == "qa" and "question" in payload:
-                # User has a question - route to QA mode
-                question = str(payload["question"]).strip()
-                return {
-                    "pending_question": question,
-                    "decision": "qa",
-                    "next_node_after_qa": NodeNames.INTRO,
-                    "messages": welcome_msgs + [HumanMessage(content=question)]
-                }
-            elif "question" in payload:
-                # Legacy support: User has a question - route to QA mode
-                question = str(payload["question"]).strip()
-                return {
-                    "pending_question": question,
-                    "decision": "qa",
-                    "next_node_after_qa": NodeNames.INTRO,
-                    "messages": welcome_msgs + [HumanMessage(content=question)]
-                }
-        else:
-            raise ValueError(
-                f"Unexpected interrupt payload type: {type(payload)}")
+            # Show the endpoint prompt (started) if nothing consumed
+            return {"started": True, "messages": welcome_msgs + [AIMessage(content=(
+                "Great! Let's get started with the integration.\n\n"
+                "Please enter the Test and Production endpoint URLs in the form shown."))]}
 
     # Check if we're returning from QA mode and still need endpoints
     if not has_endpoint_information(prov) and state.get("decision") in ["qa", "continue"]:
@@ -500,48 +345,25 @@ def intro_node(state: ApiMappingState) -> dict:
             raise ValueError(
                 f"Unexpected interrupt payload type: {type(start_payload)}")
 
-    # If we reach here, we should be processing endpoint input
-    user_input = get_latest_user_message(messages)
-    if not user_input:
+    # If we previously showed the endpoints prompt (started=True), collect
+    # the structured endpoint input via the interrupt UI and process it.
+    if not has_endpoint_information(prov):
+        if state.get("started"):
+            endpoints_payload = interrupt({
+                "type": "ask_endpoints",
+                "title": "Step 1: AEB RZ Endpoints",
+                "prompt": "Please provide the AEB RZ Endpoints.",
+            })
+
+            out = _handle_endpoints_payload(endpoints_payload)
+            if out is not None:
+                return out
+
+            # Still waiting for valid endpoint input -> keep started flag
+            return {"started": True}
+
+        # No started flag and no endpoints -> nothing to do here
         return {}
-
-    found_endpoints = parse_endpoints(user_input)
-
-    # If exactly one URL and no prior endpoints, accept as test by default
-    single = URL_RE.findall(user_input)
-    if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
-        found_endpoints["test_endpoint"] = single[0]
-
-    # Check if user wants to skip endpoint configuration
-    skip_keywords = ["skip", "default", "later", "don't know", "dont know"]
-    if not found_endpoints and any(keyword in user_input.lower() for keyword in skip_keywords):
-        # Use default test endpoint
-        found_endpoints = {
-            "test_endpoint": "https://default-test.aeb.com",
-            "prod_endpoint": "https://default-prod.aeb.com"
-        }
-
-    # If user provided input but parsing failed, it will be handled by the router.
-    if not has_endpoint_information(prov) and not found_endpoints:
-        return {"started": False}  # Clear started flag even if parsing failed
-
-    prov = {**prov, **found_endpoints}
-    lines = format_endpoints_message(found_endpoints)
-
-    if found_endpoints:
-        return {
-            "provisioning": prov,
-            "started": False,  # Clear the started flag
-            "messages": [
-                AIMessage(content="Thank you! Endpoints recorded:\n" +
-                          "\n".join(lines))
-            ]
-        }
-    else:
-        return {
-            "provisioning": prov,
-            "started": False  # Clear the started flag
-        }
 
 
 def route_from_intro(state: ApiMappingState) -> str:
