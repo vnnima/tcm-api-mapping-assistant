@@ -82,27 +82,22 @@ def render_interrupt_controls_if_pending() -> bool:
         return False
 
     if st.session_state.pending_payload['type'] == "start_or_question":
-        # Initial interrupt - offer to start the flow or ask a question
+        # Initial interrupt - offer to start the flow. Questions are disabled
+        # here: user must press Start to proceed.
         prompt_text = st.session_state.pending_payload.get(
-            'prompt', "Welcome! Click 'Start' to begin the guided API mapping process, or ask a question below.")
+            'prompt', "Welcome! Click 'Start' to begin the guided API mapping process.")
         st.info(f"**Welcome**\n\n{prompt_text}")
-
-        col1, col2 = st.columns([1, 2])
 
         def _resume_start():
             st.session_state.resume_payload = {"decision": "start"}
             st.session_state.is_resuming = True
             st.session_state.trigger_rerun = True
 
-        with col1:
-            st.button("🚀 Start", type="primary", key="interrupt_start",
-                      on_click=_resume_start)
+        st.button("🚀 Start", type="primary", key="interrupt_start",
+                  on_click=_resume_start)
 
-        with col2:
-            st.write("Or ask a question in the chat below ⬇️")
-
-        # Return False to allow chat input for questions
-        return False
+        # Return True to indicate the interrupt is active and block chat input
+        return True
 
     elif st.session_state.pending_payload['type'] == "ask_endpoints":
         # Handle endpoint asking with input fields for test and prod URLs
@@ -371,6 +366,10 @@ if st.session_state.thread_state:
 st.title(display_assistant)
 
 handle_resume_if_needed()
+render_initial_message(
+    display_assistant,
+    st.session_state.selected_thread_id,
+)
 
 # For new threads with no messages and no pending interrupt, trigger the initial run
 if (st.session_state.selected_thread_id and
@@ -431,7 +430,7 @@ interrupt_active = render_interrupt_controls_if_pending()
 # Check if we have a special interrupt that allows chat input (for questions)
 has_question_enabled_interrupt = (st.session_state.pending_interrupt is not None and
                                   st.session_state.pending_payload and
-                                  st.session_state.pending_payload.get('type') in ["start_or_question", "ask_endpoints", "ask_client", "ask_wsm", "show_general_info", "show_screening_variants", "show_responses", "question_or_continue"])
+                                  st.session_state.pending_payload.get('type') in ["ask_endpoints", "ask_client", "ask_wsm", "show_general_info", "show_screening_variants", "show_responses", "question_or_continue"])
 
 # User should not input text in chat when there is a blocking interrupt or when no thread is selected
 # Note: thread_state can be an empty dict {} for new threads, which is still valid
