@@ -71,11 +71,12 @@ def build_graph():
         "__end__": END
     })
     g.add_conditional_edges(NodeNames.ASK_CLIENT, route_from_client, {
-        NodeNames.CLARIFY: NodeNames.CLARIFY,
+        NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,  # Loop back for questions
         NodeNames.ASK_WSM: NodeNames.ASK_WSM,
         "__end__": END
     })
     g.add_conditional_edges(NodeNames.ASK_WSM, route_from_wsm, {
+        NodeNames.ASK_WSM: NodeNames.ASK_WSM,  # Loop back for questions
         NodeNames.CLARIFY: NodeNames.CLARIFY,
         NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,
         "__end__": END
@@ -107,6 +108,9 @@ def build_graph():
     g.add_edge(NodeNames.PROCESS_AND_MAP_API, END)
 
     g.add_conditional_edges(NodeNames.QA_MODE, route_from_qa_mode, {
+        NodeNames.INTRO: NodeNames.INTRO,
+        NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
+        NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,
         NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,
         NodeNames.EXPLAIN_RESPONSES: NodeNames.EXPLAIN_RESPONSES,
         NodeNames.API_MAPPING_INTRO: NodeNames.API_MAPPING_INTRO,

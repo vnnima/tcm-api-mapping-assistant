@@ -18,6 +18,7 @@ class ApiMappingState(TypedDict):
     decision: str | None  # continue or qa
     pending_question: str | None  # the user's question to feed into qa_mode
     next_node_after_qa: str
+    resume_after_qa: str | None
 
     # API Mapping Stuff
     system_name: str | None
@@ -25,6 +26,8 @@ class ApiMappingState(TypedDict):
     api_file_path: str | None
 
     # Skip flags for information nodes
+    skip_client: bool | None
+    skip_wsm: bool | None
     skip_general_info: bool
     skip_screening_variants: bool
     skip_responses: bool

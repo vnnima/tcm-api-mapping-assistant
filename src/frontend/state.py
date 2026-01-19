@@ -54,3 +54,6 @@ def initialize_session_state(user_id: str):
     # Generic rerun trigger for callbacks (avoid calling st.rerun() inside them)
     if "trigger_rerun" not in st.session_state:
         st.session_state.trigger_rerun = False
+
+    if "initial_run_triggered" not in st.session_state:
+        st.session_state.initial_run_triggered = False

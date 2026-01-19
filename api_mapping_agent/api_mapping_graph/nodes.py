@@ -38,34 +38,473 @@ llm = get_llm()
 
 def intro_node(state: ApiMappingState) -> dict:
     messages = state.get("messages", [])
-    # If there are no messages, it's the first turn.
-    # Greet the user and ask for endpoints.
-    if not messages:
+    prov = state.get("provisioning", {})
+
+    # Prepare welcome messages container (may be used when returning from QA)
+    welcome_msgs = []
+
+    # If there's an explicit resume flag for ask_endpoints, handle it immediately
+    if state.get("resume_after_qa") == "ask_endpoints" and not has_endpoint_information(prov):
+        endpoints_payload = interrupt({
+            "type": "ask_endpoints",
+            "title": "Step 1: AEB RZ Endpoints",
+            "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
+        })
+
+        if isinstance(endpoints_payload, dict):
+            # If structured endpoint fields were submitted, accept them
+            if "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
+                test_url = str(endpoints_payload.get("test_url", "")).strip()
+                prod_url = str(endpoints_payload.get("prod_url", "")).strip()
+                found_endpoints = {}
+                if test_url:
+                    found_endpoints["test_endpoint"] = test_url
+                if prod_url:
+                    found_endpoints["prod_endpoint"] = prod_url
+
+                if found_endpoints:
+                    return {
+                        "provisioning": found_endpoints,
+                        "decision": None,
+                        "started": False,
+                        "resume_after_qa": None,
+                        "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
+                    }
+
+            # If user supplied free-text endpoints
+            if "endpoints" in endpoints_payload:
+                endpoints_text = str(endpoints_payload["endpoints"]).strip()
+                found_endpoints = parse_endpoints(endpoints_text)
+                if found_endpoints:
+                    return {
+                        "provisioning": found_endpoints,
+                        "decision": None,
+                        "started": False,
+                        "resume_after_qa": None,
+                        "messages": [AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
+                    }
+
+            # Check for question
+            if "question" in endpoints_payload and endpoints_payload["question"]:
+                question = str(endpoints_payload["question"]).strip()
+                return {
+                    "pending_question": question,
+                    "decision": "qa",
+                    "next_node_after_qa": NodeNames.INTRO,
+                    "resume_after_qa": "ask_endpoints",
+                    "messages": [HumanMessage(content=question)]
+                }
+
+            # Check for skip
+            if "response" in endpoints_payload:
+                response = str(endpoints_payload.get(
+                    "response", "")).strip().lower()
+                if response in {"skip", "no", "false", "0"}:
+                    return {
+                        "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
+                        "decision": None,
+                        "started": False,
+                        "resume_after_qa": None,
+                        "messages": [AIMessage(content="Using default endpoints. You can update these later if needed.")]
+                    }
+
+        # Otherwise show the endpoints interrupt prompt
         return {
             "started": True,
-            "messages": [
-                AIMessage(content=(
-                    "Hello! I'm your **AEB API Mapping Assistant**. "
-                    "I help you cleanly integrate the **TCM Screening API** into your system.\n\n"
-                    "Please first provide the **AEB RZ Endpoints** (at least one URL). "
-                    "These are required for API integration. "
-                    f"Note: {Config.ENDPOINTS_HELP_URL}\n\n"
-                    "Format:  \n"
-                    "```\n"
-                    "Test: https://...  \n"
-                    "Prod:  https://...  \n"
-                    "```"
-                ))
-            ]
+            "decision": None,
+            "resume_after_qa": None,
+            "messages": [AIMessage(content=(
+                "**Step 1: AEB RZ Endpoints**\n\n"
+                "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                "Please enter these in the input below to proceed to the next step.\n\n"
+                "**Format:**\n"
+                "```\n"
+                "Test: https://...  \n"
+                "Prod: https://...  \n"
+                "```\n\n"
+                "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+            ))]
         }
 
-    # This part handles the user's response to the endpoint question.
+    # Debug: log incoming resume flag and provisioning briefly
+    try:
+        print(
+            f"DEBUG intro_node ENTRY: decision={state.get('decision')} resume_after_qa={state.get('resume_after_qa')} provisioning_keys={list(state.get('provisioning', {}).keys())}")
+    except Exception:
+        pass
+
+    # If we're returning from QA and need to resume a specific interrupt, handle that first
+    if not has_endpoint_information(prov) and state.get("decision") in ["qa", "continue"]:
+        if state.get("resume_after_qa") == "ask_endpoints":
+            endpoints_payload = interrupt({
+                "type": "ask_endpoints",
+                "title": "Step 1: AEB RZ Endpoints",
+                "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
+            })
+
+            if isinstance(endpoints_payload, dict):
+                # Check if user asked a question
+                if "question" in endpoints_payload and endpoints_payload["question"]:
+                    question = str(endpoints_payload["question"]).strip()
+                    return {
+                        "pending_question": question,
+                        "decision": "qa",
+                        "next_node_after_qa": NodeNames.INTRO,
+                        "resume_after_qa": "ask_endpoints",
+                        "messages": [HumanMessage(content=question)]
+                    }
+                # Check if user wants to skip
+                elif "response" in endpoints_payload:
+                    response = str(endpoints_payload.get(
+                        "response", "")).strip().lower()
+                    if response in {"skip", "no", "false", "0"}:
+                        # Use default endpoints
+                        return {
+                            "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
+                            "decision": None,  # Clear decision
+                            "started": False,
+                            "resume_after_qa": None,
+                            "messages": [
+                                AIMessage(
+                                    content="Using default endpoints. You can update these later if needed.")
+                            ]
+                        }
+                # If user provided test_url/prod_url via the structured inputs
+                elif "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
+                    test_url = str(endpoints_payload.get(
+                        "test_url", "")).strip()
+                    prod_url = str(endpoints_payload.get(
+                        "prod_url", "")).strip()
+
+                    found_endpoints = {}
+                    if test_url:
+                        found_endpoints["test_endpoint"] = test_url
+                    if prod_url:
+                        found_endpoints["prod_endpoint"] = prod_url
+
+                    if found_endpoints:
+                        return {
+                            "provisioning": found_endpoints,
+                            "decision": None,  # Clear decision
+                            "started": False,
+                            "resume_after_qa": None,
+                            "messages": [
+                                AIMessage(content="Thank you! Endpoints recorded:\n" +
+                                          "\n".join(format_endpoints_message(found_endpoints)))
+                            ]
+                        }
+                # If user provided endpoint data directly
+                elif "endpoints" in endpoints_payload:
+                    endpoints_text = str(
+                        endpoints_payload["endpoints"]).strip()
+                    found_endpoints = parse_endpoints(endpoints_text)
+                    if found_endpoints:
+                        return {
+                            "provisioning": found_endpoints,
+                            "decision": None,  # Clear decision
+                            "started": False,
+                            "resume_after_qa": None,
+                            "messages": [
+                                AIMessage(content="Thank you! Endpoints recorded:\n" +
+                                          "\n".join(format_endpoints_message(found_endpoints)))
+                            ]
+                        }
+
+            # If we get here, show the endpoint prompt with started flag
+            return {
+                "started": True,
+                "decision": None,  # Clear decision
+                "resume_after_qa": None,
+                "messages": [
+                    AIMessage(content=(
+                        "**Step 1: AEB RZ Endpoints**\n\n"
+                        "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                        "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                        "Please enter these in the input below to proceed to the next step.\n\n"
+                        "**Format:**\n"
+                        "```\n"
+                        "Test: https://...  \n"
+                        "Prod: https://...  \n"
+                        "```\n\n"
+                        "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                    ))
+                ]
+            }
+
+    # Only trigger the start interrupt on the very first run (no messages at all)
+    if not messages:
+        # Show welcome message if this is the first time
+        welcome_msgs = []
+        if not messages:
+            welcome_msgs = [
+                AIMessage(content=(
+                    "Welcome to the **API Mapping Assistant**. This assistant guides you step by step through all the relevant steps required to technically connect your partner or host system to Compliance Screening via an API.\n\n"
+                    "Additionally you can ask me general questions about the integration or the API during each step."
+                ))
+            ]
+
+        payload = interrupt({
+            "type": "start_or_question",
+            "prompt": "Press 'Start' to begin the integration process or type a question below.",
+        })
+
+        if isinstance(payload, dict):
+            if payload.get("decision") == "start" or payload.get("start") is True or str(payload.get("start", "")).lower() in {"true", "1", "yes", "start"}:
+                # User wants to start the guide - now ask for endpoints via interrupt
+                endpoints_payload = interrupt({
+                    "type": "ask_endpoints",
+                    "title": "Step 1: AEB RZ Endpoints",
+                    "prompt": "Please provide the AEB RZ Endpoints.",
+                })
+
+                if isinstance(endpoints_payload, dict):
+                    # Check if user asked a question
+                    if "question" in endpoints_payload and endpoints_payload["question"]:
+                        question = str(endpoints_payload["question"]).strip()
+                        return {
+                            "pending_question": question,
+                            "decision": "qa",
+                            "next_node_after_qa": NodeNames.INTRO,
+                            "resume_after_qa": "ask_endpoints",
+                            "messages": welcome_msgs + [HumanMessage(content=question)]
+                        }
+                    # If user provided test_url and prod_url
+                    elif "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
+                        test_url = str(endpoints_payload.get(
+                            "test_url", "")).strip()
+                        prod_url = str(endpoints_payload.get(
+                            "prod_url", "")).strip()
+
+                        found_endpoints = {}
+                        if test_url:
+                            found_endpoints["test_endpoint"] = test_url
+                        if prod_url:
+                            found_endpoints["prod_endpoint"] = prod_url
+
+                        if found_endpoints:
+                            return {
+                                "provisioning": found_endpoints,
+                                "started": False,
+                                "messages": welcome_msgs + [
+                                    AIMessage(content="Thank you! Endpoints recorded:\n" +
+                                              "\n".join(format_endpoints_message(found_endpoints)))
+                                ]
+                            }
+
+                # If we get here, show the endpoint prompt with started flag
+                return {
+                    "started": True,
+                    "messages": welcome_msgs + [
+                        AIMessage(content=(
+                            "Great! Let's get started with the integration.\n\n"
+                            "**Step 1: AEB RZ Endpoints**\n\n"
+                            "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                            "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                            "Please enter these in the input below to proceed to the next step.\n\n"
+                            "**Format:**\n"
+                            "```\n"
+                            "Test: https://...  \n"
+                            "Prod: https://...  \n"
+                            "```\n\n"
+                            "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                        ))
+                    ]
+                }
+            elif payload.get("decision") == "qa" and "question" in payload:
+                # User has a question - route to QA mode
+                question = str(payload["question"]).strip()
+                return {
+                    "pending_question": question,
+                    "decision": "qa",
+                    "next_node_after_qa": NodeNames.INTRO,
+                    "messages": welcome_msgs + [HumanMessage(content=question)]
+                }
+            elif "question" in payload:
+                # Legacy support: User has a question - route to QA mode
+                question = str(payload["question"]).strip()
+                return {
+                    "pending_question": question,
+                    "decision": "qa",
+                    "next_node_after_qa": NodeNames.INTRO,
+                    "messages": welcome_msgs + [HumanMessage(content=question)]
+                }
+        else:
+            raise ValueError(
+                f"Unexpected interrupt payload type: {type(payload)}")
+
+    # Check if we're returning from QA mode and still need endpoints
+    if not has_endpoint_information(prov) and state.get("decision") in ["qa", "continue"]:
+        # If QA asked while the endpoints prompt was active, re-show the endpoints interrupt
+        if state.get("resume_after_qa") == "ask_endpoints":
+            # Clear the resume flag so it doesn't persist
+            resume_flag = state.get("resume_after_qa")
+            endpoints_payload = interrupt({
+                "type": "ask_endpoints",
+                "title": "Step 1: AEB RZ Endpoints",
+                "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
+            })
+
+            if isinstance(endpoints_payload, dict):
+                # Remove the resume flag from state on consumption
+                out = {}
+                # Check if user asked a question
+                if "question" in endpoints_payload and endpoints_payload["question"]:
+                    question = str(endpoints_payload["question"]).strip()
+                    return {
+                        "pending_question": question,
+                        "decision": "qa",
+                        "next_node_after_qa": NodeNames.INTRO,
+                        "resume_after_qa": "ask_endpoints",
+                        "messages": [HumanMessage(content=question)]
+                    }
+                # Check if user wants to skip
+                elif "response" in endpoints_payload:
+                    response = str(endpoints_payload.get(
+                        "response", "")).strip().lower()
+                    if response in {"skip", "no", "false", "0"}:
+                        # Use default endpoints
+                        return {
+                            "provisioning": {"test_endpoint": "https://default-test.aeb.com", "prod_endpoint": "https://default-prod.aeb.com"},
+                            "decision": None,  # Clear decision
+                            "started": False,
+                            "resume_after_qa": None,
+                            "messages": [
+                                AIMessage(
+                                    content="Using default endpoints. You can update these later if needed.")
+                            ]
+                        }
+                # If user provided endpoint data directly
+                elif "endpoints" in endpoints_payload:
+                    endpoints_text = str(
+                        endpoints_payload["endpoints"]).strip()
+                    found_endpoints = parse_endpoints(endpoints_text)
+                    if found_endpoints:
+                        return {
+                            "provisioning": found_endpoints,
+                            "decision": None,  # Clear decision
+                            "started": False,
+                            "resume_after_qa": None,
+                            "messages": [
+                                AIMessage(content="Thank you! Endpoints recorded:\n" +
+                                          "\n".join(format_endpoints_message(found_endpoints)))
+                            ]
+                        }
+
+            # If we get here, show the endpoint prompt with started flag
+            return {
+                "started": True,
+                "decision": None,  # Clear decision
+                "resume_after_qa": None,
+                "messages": [
+                    AIMessage(content=(
+                        "**Step 1: AEB RZ Endpoints**\n\n"
+                        "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                        "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                        "Please enter these in the input below to proceed to the next step.\n\n"
+                        "**Format:**\n"
+                        "```\n"
+                        "Test: https://...  \n"
+                        "Prod: https://...  \n"
+                        "```\n\n"
+                        "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                    ))
+                ]
+            }
+
+        # First, re-show the welcome/start interrupt so the user can Start or ask another question
+        start_payload = interrupt({
+            "type": "start_or_question",
+            "prompt": "Press 'Start' to begin the integration process or type a question below.",
+        })
+
+        if isinstance(start_payload, dict):
+            # If user chose to start, proceed to the endpoints interrupt (same flow as initial start)
+            if start_payload.get("decision") == "start" or start_payload.get("start") is True or str(start_payload.get("start", "")).lower() in {"true", "1", "yes", "start"}:
+                endpoints_payload = interrupt({
+                    "type": "ask_endpoints",
+                    "title": "Step 1: AEB RZ Endpoints",
+                    "prompt": "Please provide the AEB RZ Endpoints.",
+                })
+
+                if isinstance(endpoints_payload, dict):
+                    # Check if user asked a question
+                    if "question" in endpoints_payload and endpoints_payload["question"]:
+                        question = str(endpoints_payload["question"]).strip()
+                        return {
+                            "pending_question": question,
+                            "decision": "qa",
+                            "next_node_after_qa": NodeNames.INTRO,
+                            "messages": [HumanMessage(content=question)]
+                        }
+                    # If user provided test_url and prod_url
+                    elif "test_url" in endpoints_payload or "prod_url" in endpoints_payload:
+                        test_url = str(endpoints_payload.get(
+                            "test_url", "")).strip()
+                        prod_url = str(endpoints_payload.get(
+                            "prod_url", "")).strip()
+
+                        found_endpoints = {}
+                        if test_url:
+                            found_endpoints["test_endpoint"] = test_url
+                        if prod_url:
+                            found_endpoints["prod_endpoint"] = prod_url
+
+                        if found_endpoints:
+                            return {
+                                "provisioning": found_endpoints,
+                                "started": False,
+                                "messages": [welcome_msgs[0] if welcome_msgs else AIMessage(content=""), AIMessage(content="Thank you! Endpoints recorded:\n" + "\n".join(format_endpoints_message(found_endpoints)))]
+                            }
+
+                # If we get here, show the endpoint prompt with started flag
+                return {
+                    "started": True,
+                    "messages": welcome_msgs + [
+                        AIMessage(content=(
+                            "Great! Let's get started with the integration.\n\n"
+                            "**Step 1: AEB RZ Endpoints**\n\n"
+                            "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
+                            "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
+                            "Please enter these in the input below to proceed to the next step.\n\n"
+                            "**Format:**\n"
+                            "```\n"
+                            "Test: https://...  \n"
+                            "Prod: https://...  \n"
+                            "```\n\n"
+                            "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                        ))
+                    ]
+                }
+
+            # If user asked another question at the start prompt -> go to QA
+            elif start_payload.get("decision") == "qa" and "question" in start_payload:
+                question = str(start_payload["question"]).strip()
+                return {
+                    "pending_question": question,
+                    "decision": "qa",
+                    "next_node_after_qa": NodeNames.INTRO,
+                    "messages": welcome_msgs + [HumanMessage(content=question)]
+                }
+            elif "question" in start_payload:
+                # Legacy support
+                question = str(start_payload["question"]).strip()
+                return {
+                    "pending_question": question,
+                    "decision": "qa",
+                    "next_node_after_qa": NodeNames.INTRO,
+                    "messages": welcome_msgs + [HumanMessage(content=question)]
+                }
+
+        else:
+            raise ValueError(
+                f"Unexpected interrupt payload type: {type(start_payload)}")
+
+    # If we reach here, we should be processing endpoint input
     user_input = get_latest_user_message(messages)
     if not user_input:
-        # This case should ideally not be hit if the flow is correct
         return {}
 
-    prov = state.get("provisioning", {})
     found_endpoints = parse_endpoints(user_input)
 
     # If exactly one URL and no prior endpoints, accept as test by default
@@ -73,9 +512,18 @@ def intro_node(state: ApiMappingState) -> dict:
     if single and len(single) == 1 and not found_endpoints and not has_endpoint_information(prov):
         found_endpoints["test_endpoint"] = single[0]
 
+    # Check if user wants to skip endpoint configuration
+    skip_keywords = ["skip", "default", "later", "don't know", "dont know"]
+    if not found_endpoints and any(keyword in user_input.lower() for keyword in skip_keywords):
+        # Use default test endpoint
+        found_endpoints = {
+            "test_endpoint": "https://default-test.aeb.com",
+            "prod_endpoint": "https://default-prod.aeb.com"
+        }
+
     # If user provided input but parsing failed, it will be handled by the router.
     if not has_endpoint_information(prov) and not found_endpoints:
-        return {}
+        return {"started": False}  # Clear started flag even if parsing failed
 
     prov = {**prov, **found_endpoints}
     lines = format_endpoints_message(found_endpoints)
@@ -83,6 +531,7 @@ def intro_node(state: ApiMappingState) -> dict:
     if found_endpoints:
         return {
             "provisioning": prov,
+            "started": False,  # Clear the started flag
             "messages": [
                 AIMessage(content="Thank you! Endpoints recorded:\n" +
                           "\n".join(lines))
@@ -90,7 +539,8 @@ def intro_node(state: ApiMappingState) -> dict:
         }
     else:
         return {
-            "provisioning": prov
+            "provisioning": prov,
+            "started": False  # Clear the started flag
         }
 
 
@@ -103,24 +553,36 @@ def route_from_intro(state: ApiMappingState) -> str:
 
     messages = state.get("messages", [])
     user_input = get_last_user_message(messages)
+    prov = state.get("provisioning", {})
 
+    # If we just showed the endpoint prompt (started=True), end turn to wait for user input
+    if state.get("started") and not has_endpoint_information(prov):
+        return END
+
+    # If user chose to ask a question (decision set by intro_node interrupt)
+    if state.get("decision") == "qa":
+        return NodeNames.QA_MODE
+
+    # If returning from QA mode with 'continue' decision and no endpoints, route back to INTRO
+    if state.get("decision") == "continue" and not has_endpoint_information(prov):
+        return END
+
+    # Check if we have endpoint information - if yes, proceed even without new user input
+    # (endpoints might have been provided via interrupt)
+    if has_endpoint_information(prov):
+        if not prov.get("clientIdentCode"):
+            return NodeNames.ASK_CLIENT
+        if "wsm_user_configured" not in prov:
+            return NodeNames.ASK_WSM
+        # All good -> guide
+        return NodeNames.GENERAL_SCREENING_INFO
+
+    # No endpoints and no user input
     if not user_input:
         return END
 
-    prov = state.get("provisioning", {})
-
-    # Check if we have endpoint information
-    if not has_endpoint_information(prov):
-        return NodeNames.CLARIFY
-
-    if not prov.get("clientIdentCode"):
-        return NodeNames.ASK_CLIENT
-
-    if "wsm_user_configured" not in prov:
-        return NodeNames.ASK_WSM
-
-    # All good -> guide
-    return NodeNames.GENERAL_SCREENING_INFO
+    # We have user input but no endpoints yet - try to clarify
+    return NodeNames.CLARIFY
 
 
 def clarify_node(state: ApiMappingState) -> dict:
@@ -178,192 +640,171 @@ def route_from_clarify(state: ApiMappingState) -> str:
 
 
 def ask_client_node(state: ApiMappingState) -> dict:
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
     prov = state.get("provisioning", {})
 
-    confirmation_msgs = []
+    # Use interrupt to allow skip/question
+    payload = interrupt({
+        "type": "ask_client",
+        "title": "Step 2: Client Name (clientIdentCode)",
+        "prompt": "Please provide your clientIdentCode or skip to use default.",
+    })
 
-    if not user_input:
-        return {
-            "messages": confirmation_msgs + [
-                AIMessage(content=(
-                    "2) **Client Name (clientIdentCode)**:\n"
-                    "- A separate client is available for each customer.\n"
-                    "Please share your **clientIdentCode** (e.g. APITEST).\n\n"
-                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`"
-                ))
-            ]
-        }
+    skip_client = None  # None means proceed with data, True means use default, False means loop
+    messages_to_add = []
 
-    if user_input:
-        parsed_client = parse_client_ident(user_input)
+    if isinstance(payload, dict):
+        # Check if user asked a question
+        if "question" in payload and payload["question"]:
+            question = str(payload["question"]).strip()
 
-        # If parsing failed, use LLM to understand user intent
-        if not parsed_client:
+            # Use RAG for answering
+            Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(
+                parents=True, exist_ok=True)
+            ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(
+            ), Config.KNOWLEDGE_BASE_VECTOR_STORE)
+
+            snippets = rag_search(
+                f"Question about Screening API: {question}", k=5)
+            snippets_text = "\n\n".join([f"Document {i+1}:\n{snippet}" for i, snippet in enumerate(
+                snippets)]) if snippets else '[No relevant documentation excerpts found]'
+
             sys = SystemMessage(content=(
-                "You are helping analyze a user's response about their clientIdentCode. "
-                "The clientIdentCode is a unique identifier for each customer in the TCM Screening API. "
-                "Analyze the user's message and determine:\n"
-                "1. If they explicitly state they don't have a clientIdentCode (return 'no_code')\n"
-                "2. If they provided a code but it wasn't parsed (extract and return it)\n"
-                "3. If they're asking a question or unclear (return 'unclear')\n\n"
-                "Respond with ONLY ONE of:\n"
-                "- 'no_code' if they don't have one\n"
-                "- 'unclear' if you can't determine\n"
-                "- The actual code if you can extract it"
+                "You are an AEB Trade Compliance API expert. "
+                "Answer questions about the TCM Screening API precisely and helpfully in English. "
+                "ALWAYS use the available documentation excerpts."
             ))
 
-            human = HumanMessage(content=f"User's response: \"{user_input}\"")
-            llm_response = llm.invoke([sys, human])
-            llm_answer = str(llm_response.content).strip().lower()
+            human = HumanMessage(
+                content=f"User question: {question}\n\nDocumentation:\n{snippets_text}")
+            resp = llm.invoke([sys, human])
 
-            if llm_answer == "no_code":
-                # User doesn't have a code, use fallback
-                prov = {**prov, "clientIdentCode": "APITEST"}
-                return {
-                    "provisioning": prov,
-                    "messages": confirmation_msgs + [
-                        AIMessage(content=(
-                            "No problem! I'll use **APITEST** as the default clientIdentCode for now. "
-                            "This is a standard test client that can be used for integration testing.\n\n"
-                            f"Client recorded: clientIdentCode=APITEST"
-                        ))
-                    ]
-                }
-            elif llm_answer != "unclear":
-                # LLM extracted a code
-                prov = {**prov, "clientIdentCode": llm_answer.upper()}
-            # If unclear, fall through to re-ask
-        else:
-            prov = {**prov, "clientIdentCode": parsed_client}
+            messages_to_add.append(HumanMessage(content=question))
+            messages_to_add.append(resp)
+            # Loop back to ask again
+            skip_client = False
 
-    if not prov.get("clientIdentCode"):
-        return {
-            "provisioning": prov,
-            "messages": confirmation_msgs + [
-                AIMessage(content=(
-                    "2) **Client Name (clientIdentCode)**:\n"
-                    "- A separate client is available for each customer.\n"
-                    "Please share your **clientIdentCode** (e.g. APITEST).\n\n"
-                    "Format: `clientIdentCode=APITEST` or `Client: APITEST`\n\n"
-                    "If you don't have a clientIdentCode yet, just let me know and I'll use a default test value."
-                ))
-            ]
-        }
+        # Check if user wants to skip
+        elif "response" in payload:
+            response = str(payload.get("response", "")).strip().lower()
+            if response in {"skip", "no", "false", "0", "default"}:
+                prov["clientIdentCode"] = "APITEST"
+                messages_to_add.append(
+                    AIMessage(content="Using default clientIdentCode: APITEST")
+                )
+                skip_client = True
 
-    return {
-        "provisioning": prov,
-        "messages": confirmation_msgs + [
-            AIMessage(
-                content=f"Thank you! Client recorded: clientIdentCode={prov.get('clientIdentCode', 'N/A')}")
-        ]
-    }
+        # If user provided client code directly
+        elif "client_code" in payload:
+            client_code = str(payload["client_code"]).strip()
+            if client_code:
+                prov["clientIdentCode"] = client_code
+                messages_to_add.append(
+                    AIMessage(
+                        content=f"Thank you! Client recorded: clientIdentCode={client_code}")
+                )
+                skip_client = None  # Proceed with the data
+
+    return {"skip_client": skip_client, "provisioning": prov, "messages": messages_to_add}
 
 
 def route_from_client(state: ApiMappingState) -> str:
     """Route from client based on current provisioning state."""
     prov = state.get("provisioning", {})
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
+    skip_client = state.get("skip_client")
 
-    if user_input.strip() and not prov.get("clientIdentCode"):
-        return NodeNames.CLARIFY
+    # If a question was answered, loop back to show the interrupt again
+    if skip_client is False:
+        return NodeNames.ASK_CLIENT
 
-    if not prov.get("clientIdentCode"):
-        return END
+    # If we have client code (even without new user input), proceed to next step
+    if prov.get("clientIdentCode"):
+        return NodeNames.ASK_WSM
 
-    return NodeNames.ASK_WSM
+    # No client code
+    return END
 
 
 def ask_wsm_node(state: ApiMappingState) -> dict:
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
     prov = state.get("provisioning", {})
 
-    if not user_input.strip():
-        return {
-            "provisioning": prov,
-            "messages": [
-                AIMessage(content=(
-                    "3) **WSM User for Authentication**:\n"
-                    "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
-                    "- [This documentation](https://trade-compliance.docs.developers.aeb.com/docs/setting-up-your-environment-1) provides more details about setting up the authentication and the different options"
-                    "Is this user already set up? (Yes/No)\n\n"
-                    "If you don't have it yet, just let me know and we can continue without it for now."
-                ))
-            ]
-        }
+    # Use interrupt to allow skip/question (tri-state handling)
+    payload = interrupt({
+        "type": "ask_wsm",
+        "title": "Step 3: WSM User for Authentication",
+        "prompt": "Is the WSM user already set up? (Yes/No or Skip)",
+    })
 
-    # If parsing returned None but user provided input, use LLM to understand intent
-    if prov.get("wsm_user_configured") is None and user_input:
-        sys = SystemMessage(content=(
-            "You are helping analyze a user's response about their WSM user setup. "
-            "The WSM user is a technical user with credentials needed for API authentication. "
-            "Analyze the user's message and determine:\n"
-            "1. If they explicitly state they have it configured (return 'yes')\n"
-            "2. If they explicitly state they don't have it or need to set it up later (return 'no')\n"
-            "3. If they're asking a question or unclear (return 'unclear')\n\n"
-            "Respond with ONLY ONE word: 'yes', 'no', or 'unclear'"
-        ))
+    skip_wsm = None  # None means proceed with data, True means set default/no, False means loop
+    messages_to_add = []
 
-        human = HumanMessage(content=f"User's response: \"{user_input}\"")
-        llm_response = llm.invoke([sys, human])
-        llm_answer = str(llm_response.content).strip().lower()
+    if isinstance(payload, dict):
+        # Check if user asked a question
+        if "question" in payload and payload["question"]:
+            question = str(payload["question"]).strip()
 
-        if llm_answer == "no":
-            # User doesn't have WSM user, set as not configured and continue
-            prov["wsm_user_configured"] = False
-            return {
-                "provisioning": prov,
-                "messages": [
-                    AIMessage(content=(
-                        "No worries! You can continue without the WSM user for now and set it up later. "
-                        "The WSM user credentials will be needed when you're ready to make live API calls.\n\n"
-                        "WSM user available: No"
-                    ))
-                ]
-            }
-        elif llm_answer == "yes":
-            prov["wsm_user_configured"] = True
-            is_wsm_configured = True
-        # If unclear, fall through to re-ask
+            # Use RAG for answering
+            Config.KNOWLEDGE_BASE_DIR.mkdir(parents=True, exist_ok=True)
+            Config.KNOWLEDGE_BASE_VECTOR_STORE.mkdir(
+                parents=True, exist_ok=True)
+            ensure_index_built(Config.KNOWLEDGE_BASE_DIR.as_posix(),
+                               Config.KNOWLEDGE_BASE_VECTOR_STORE)
 
-    if prov.get("wsm_user_configured") is None:
-        return {
-            "provisioning": prov,
-            "messages": [
-                AIMessage(content=(
-                    "3) **WSM User for Authentication**:\n"
-                    "- In addition to the client, there is a **technical WSM user** including password for API connection.\n"
-                    "Is this user already set up? (Yes/No)\n\n"
-                    "If you don't have it yet, just let me know and we can continue without it for now."
-                ))
-            ]
-        }
+            snippets = rag_search(
+                f"Question about Screening API: {question}", k=5)
+            snippets_text = "\n\n".join([f"Document {i+1}:\n{snippet}" for i, snippet in enumerate(
+                snippets)]) if snippets else '[No relevant documentation excerpts found]'
 
-    yn = "Yes" if prov.get("wsm_user_configured") else "No"
-    return {
-        "provisioning": prov,
-        "messages": [
-            AIMessage(content=f"WSM user available: {yn}.")
-        ]
-    }
+            sys = SystemMessage(content=(
+                "You are an AEB Trade Compliance API expert. "
+                "Answer questions about the TCM Screening API precisely and helpfully in English. "
+                "ALWAYS use the available documentation excerpts."
+            ))
+
+            human = HumanMessage(
+                content=f"User question: {question}\n\nDocumentation:\n{snippets_text}")
+            resp = llm.invoke([sys, human])
+
+            messages_to_add.append(HumanMessage(content=question))
+            messages_to_add.append(resp)
+            # Loop back to ask again
+            skip_wsm = False
+
+        # Check if user wants to skip or provided response
+        elif "response" in payload:
+            response = str(payload.get("response", "")).strip().lower()
+            if response in {"skip", "no", "false", "0"}:
+                prov["wsm_user_configured"] = False
+                messages_to_add.append(
+                    AIMessage(
+                        content="No worries! You can set up the WSM user later. WSM user available: No")
+                )
+                skip_wsm = True
+            elif response in {"yes", "true", "1"}:
+                prov["wsm_user_configured"] = True
+                messages_to_add.append(
+                    AIMessage(content="Great! WSM user available: Yes")
+                )
+                skip_wsm = None
+
+    return {"skip_wsm": skip_wsm, "provisioning": prov, "messages": messages_to_add}
 
 
 def route_from_wsm(state: ApiMappingState) -> str:
     """Route from WSM based on current provisioning state."""
     prov = state.get("provisioning", {})
-    messages = state.get("messages", [])
-    user_input = get_latest_user_message(messages)
+    skip_wsm = state.get("skip_wsm")
 
-    if user_input.strip() and prov.get("wsm_user_configured") is None:
-        return NodeNames.CLARIFY
+    # If a question was answered, loop back to show the interrupt again
+    if skip_wsm is False:
+        return NodeNames.ASK_WSM
 
-    if prov.get("wsm_user_configured") is None:
-        return END
+    # If we have a definitive wsm config, proceed
+    if prov.get("wsm_user_configured") is not None:
+        return NodeNames.ASK_GENERAL_INFO
 
-    return NodeNames.ASK_GENERAL_INFO
+    # Otherwise wait for user input
+    return END
 
 
 def ask_general_info_node(state: ApiMappingState) -> dict:
@@ -1170,14 +1611,35 @@ def qa_mode_node(state: ApiMappingState) -> dict:
     prov = state.get("provisioning", {})
     question = (state.get("pending_question") or "").strip()
 
+    # Debug: log incoming QA state
+    try:
+        print(
+            f"DEBUG qa_mode_node ENTRY: pending_question={state.get('pending_question')} next_node_after_qa={state.get('next_node_after_qa')} resume_after_qa={state.get('resume_after_qa')}")
+    except Exception:
+        pass
+
+    # Determine where to go after QA if not already set
+    if not state.get("next_node_after_qa"):
+        if not has_endpoint_information(prov):
+            next_node = NodeNames.INTRO
+        else:
+            next_node = NodeNames.ASK_GENERAL_INFO
+    else:
+        next_node = state.get("next_node_after_qa")
+
     if not question:
         payload = interrupt({
             "type": "question_or_continue",
-            "prompt": "Press `continue` to proceed or ask your question.",
+            "prompt": "Press `continue` to proceed with the guide or ask another question.",
         })
         if isinstance(payload, dict):
             if payload.get("continue") is True or str(payload.get("continue")).lower() in {"true", "1", "yes"}:
-                return {"decision": "continue"}
+                return {
+                    "decision": "continue",
+                    "next_node_after_qa": next_node,
+                    "pending_question": "",
+                    "resume_after_qa": state.get("resume_after_qa"),
+                }
             elif "question" in payload:
                 decision = "qa"
                 question = str(payload["question"]).strip()
@@ -1187,7 +1649,11 @@ def qa_mode_node(state: ApiMappingState) -> dict:
 
     # If still no question stay here
     if not question:
-        return {"decision": "qa"}
+        return {
+            "decision": "qa",
+            "next_node_after_qa": next_node,
+            "resume_after_qa": state.get("resume_after_qa"),
+        }
 
     # Check for debug commands
     if question.lower().strip() in ["debug", "debug rag", "debug vectorstore"]:
@@ -1197,6 +1663,7 @@ def qa_mode_node(state: ApiMappingState) -> dict:
             "messages": [AIMessage(content="Debug information has been printed to the console. Check the server logs for detailed RAG system status.")],
             "decision": "qa",
             "pending_question": "",
+            "resume_after_qa": state.get("resume_after_qa"),
         }
 
     # Ensure directories exist before building index
@@ -1250,16 +1717,14 @@ IMPORTANT: Use the documentation excerpts as the primary source and use the corr
 
     resp = llm.invoke([sys, human])
 
-    decision, question = None, None
-
-    if decision is None:
-        decision = "qa"
-        question = (question or "").strip()
-
+    # Preserve any resume flag so the next node can restore the proper
+    # interrupt (for example, the ask_endpoints interrupt).
     return {
         "messages": [resp],
-        "decision": decision or "qa",
-        "pending_question": question,
+        "decision": "continue",
+        "pending_question": "",
+        "next_node_after_qa": next_node,
+        "resume_after_qa": state.get("resume_after_qa"),
     }
 
 

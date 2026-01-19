@@ -96,6 +96,7 @@ def _create_new_thread(user_id: str):
     st.session_state.pending_payload = None
     st.session_state.is_resuming = False
     st.session_state.resume_payload = None
+    st.session_state.initial_run_triggered = False
     st.session_state.trigger_rerun = True
 
 
