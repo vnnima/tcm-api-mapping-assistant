@@ -230,7 +230,7 @@ def render_interrupt_controls_if_pending() -> bool:
     elif st.session_state.pending_payload['type'] == "get_api_data":
         prompt_text = st.session_state.pending_payload[
             'prompt'] or "Please provide your system name, process, and existing API metadata (e.g., JSON schema, XML example, CSV structure, OpenAPI/Swagger definition)."
-        st.info(f"**Interrupt**\n\n{prompt_text}")
+        st.info(f"**System info:**\n\n{prompt_text}")
 
         col = st.container()
 

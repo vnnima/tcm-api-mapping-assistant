@@ -124,7 +124,7 @@ def intro_node(state: ApiMappingState) -> dict:
             endpoints_payload = interrupt({
                 "type": "ask_endpoints",
                 "title": "Step 1: AEB RZ Endpoints",
-                "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
+                "prompt": "We start with step 1. To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person. Please log in to https://my.aeb.com/home/ and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser. Please enter these in the input mask to proceed to the next step. If you don't know the endpoint right now, you can skip that step and we continue with default settings.",
             })
 
             out = _handle_endpoints_payload(endpoints_payload)
@@ -137,16 +137,11 @@ def intro_node(state: ApiMappingState) -> dict:
                 "decision": None,
                 "resume_after_qa": None,
                 "messages": [AIMessage(content=(
-                    "**Step 1: AEB RZ Endpoints**\n\n"
-                    "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                    "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                    "Please enter these in the input below to proceed to the next step.\n\n"
-                    "**Format:**\n"
-                    "```\n"
-                    "Test: https://...  \n"
-                    "Prod: https://...  \n"
-                    "```\n\n"
-                    "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
+                    """
+We start with step 1. To establish an API connection to Trade Compliance Management, you will need the **endpoints for the test and production environments** from your AEB contact person. Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the "My products" and "My test systems" section. The URLs will be displayed in your browser. **Please enter these in the input mask to proceed to the next step.**
+
+If you don't know the endpoint right now, you can skip that step and we continue with default settings.
+"""
                 ))]
             }
 
@@ -166,7 +161,7 @@ def intro_node(state: ApiMappingState) -> dict:
             endpoints_payload = interrupt({
                 "type": "ask_endpoints",
                 "title": "Step 1: AEB RZ Endpoints",
-                "prompt": "Please provide the AEB RZ Endpoints.",
+                "prompt": "We start with step 1. To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person. Please log in to https://my.aeb.com/home/ and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser. Please enter these in the input mask to proceed to the next step. If you don't know the endpoint right now, you can skip that step and we continue with default settings.",
             })
 
             out = _handle_endpoints_payload(endpoints_payload, welcome_msgs)
@@ -187,7 +182,7 @@ def intro_node(state: ApiMappingState) -> dict:
             endpoints_payload = interrupt({
                 "type": "ask_endpoints",
                 "title": "Step 1: AEB RZ Endpoints",
-                "prompt": "Please provide the AEB RZ Endpoints or skip to continue with defaults.",
+                "prompt": "We start with step 1. To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person. Please log in to https://my.aeb.com/home/ and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser. Please enter these in the input mask to proceed to the next step. If you don't know the endpoint right now, you can skip that step and we continue with default settings.",
             })
 
             if isinstance(endpoints_payload, dict):
@@ -241,20 +236,12 @@ def intro_node(state: ApiMappingState) -> dict:
                 "started": True,
                 "decision": None,  # Clear decision
                 "resume_after_qa": None,
-                "messages": [
-                    AIMessage(content=(
-                        "**Step 1: AEB RZ Endpoints**\n\n"
-                        "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                        "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                        "Please enter these in the input below to proceed to the next step.\n\n"
-                        "**Format:**\n"
-                        "```\n"
-                        "Test: https://...  \n"
-                        "Prod: https://...  \n"
-                        "```\n\n"
-                        "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
-                    ))
-                ]
+                "messages": [AIMessage(content=(
+                    """
+We start with step 1. To establish an API connection to Trade Compliance Management, you will need the **endpoints for the test and production environments** from your AEB contact person. Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the "My products" and "My test systems" section. The URLs will be displayed in your browser. **Please enter these in the input mask to proceed to the next step.**
+
+If you don't know the endpoint right now, you can skip that step and we continue with default settings.
+"""))]
             }
 
         # First, re-show the welcome/start interrupt so the user can Start or ask another question
@@ -307,18 +294,11 @@ def intro_node(state: ApiMappingState) -> dict:
                     "started": True,
                     "messages": welcome_msgs + [
                         AIMessage(content=(
-                            "Great! Let's get started with the integration.\n\n"
-                            "**Step 1: AEB RZ Endpoints**\n\n"
-                            "To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person.\n\n"
-                            "Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser.\n\n"
-                            "Please enter these in the input below to proceed to the next step.\n\n"
-                            "**Format:**\n"
-                            "```\n"
-                            "Test: https://...  \n"
-                            "Prod: https://...  \n"
-                            "```\n\n"
-                            "If you don't know the endpoint right now, you can skip this step and we'll continue with default settings."
-                        ))
+                            """
+We start with step 1. To establish an API connection to Trade Compliance Management, you will need the **endpoints for the test and production environments** from your AEB contact person. Please log in to [AEB Home](https://my.aeb.com/home/) and open the Trade Compliance Management tile in the "My products" and "My test systems" section. The URLs will be displayed in your browser. **Please enter these in the input mask to proceed to the next step.**
+
+If you don't know the endpoint right now, you can skip that step and we continue with default settings.
+"""))
                     ]
                 }
 
@@ -352,7 +332,7 @@ def intro_node(state: ApiMappingState) -> dict:
             endpoints_payload = interrupt({
                 "type": "ask_endpoints",
                 "title": "Step 1: AEB RZ Endpoints",
-                "prompt": "Please provide the AEB RZ Endpoints.",
+                "prompt": "We start with step 1. To establish an API connection to Trade Compliance Management, you will need the endpoints for the test and production environments from your AEB contact person. Please log in to https://my.aeb.com/home/ and open the Trade Compliance Management tile in the \"My products\" and \"My test systems\" section. The URLs will be displayed in your browser. Please enter these in the input mask to proceed to the next step. If you don't know the endpoint right now, you can skip that step and we continue with default settings.",
             })
 
             out = _handle_endpoints_payload(endpoints_payload)
@@ -416,8 +396,8 @@ def clarify_node(state: ApiMappingState) -> dict:
         messages) or """
 Please first provide the AEB RZ Endpoints (at least one URL). These are required for API integration. Format:
 
-Test: https://...  
-Prod:  https://...  
+Test: https://...
+Prod:  https://...
 """
     if not last_question:
         last_question = "a question"  # TODO: Handle this differently
@@ -468,7 +448,7 @@ def ask_client_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "ask_client",
         "title": "Step 2: Client Name (clientIdentCode)",
-        "prompt": "Please provide your clientIdentCode or skip to use default.",
+        "prompt": "We start with step 2. In each API call, a **client (technical field name clientIdentCode)** must be transferred in the `screeningParameters`. The client is displayed in the 'Trade Compliance Management' tiles. **Please enter this client now in the input mask to proceed to the next step**.\n\nIf you don't know the client right now, you can skip that step and we continue with default settings.",
     })
 
     skip_client = None  # None means proceed with data, True means use default, False means loop
@@ -554,7 +534,7 @@ def ask_wsm_node(state: ApiMappingState) -> dict:
     payload = interrupt({
         "type": "ask_wsm",
         "title": "Step 3: WSM User for Authentication",
-        "prompt": "Is the WSM user already set up? (Yes/No or Skip)",
+        "prompt": "We start with step 3. Depending on the technology (REST or SOAP) different authentication methods could be used:\n - HTTP Basic Authentication: This can be used with REST and SOAP and requires authentication data to be provided with each call.\n - Token Authentication: This can only be used with REST and requires an additional call to request a token, that can then be used for subsequent calls for a limited time. \nYou can find further technical documentation about setting up the authentication here: https://trade-compliance.docs.developers.aeb.com/docs/setting-up-your-environment-1#token-authentication \n\nBoth methods require a **technical user ID and password** that must be provided by AEB. **Did you have this access credentials?**\n\n If you don't have it yet, we can continue without it and go to the next step.",
     })
 
     skip_wsm = None  # None means proceed with data, True means set default/no, False means loop
@@ -633,8 +613,8 @@ def ask_general_info_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see general screening information."""
     payload = interrupt({
         "type": "show_general_info",
-        "title": "1. Initial Integration Guide for Sanctions List Screening",
-        "prompt": "Would you like to see the Initial Integration Guide for Sanctions List Screening? (Yes or Skip)",
+        "title": "Step 4: Initial Integration Guide for Sanctions List Screening",
+        "prompt": "We start with step 4. Before starting to develop the API, there is helpful general information about the **supported interface architectures, objects relevant for screening**, and the grouping of **name and address fields**, whether they are required or optional.\n\n**Would you like to see this information?**",
     })
 
     skip = None  # None means show content, True means skip, False means loop
@@ -692,7 +672,7 @@ Available configuration:
 Available documentation excerpts:
 {snippets_text}
 
-Answer the question based on the available information. 
+Answer the question based on the available information.
 IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
 """)
 
@@ -730,65 +710,29 @@ def route_from_ask_general_info(state: ApiMappingState) -> str:
 def general_screening_info_node(state: ApiMappingState) -> dict:
     prov = state.get("provisioning", {})
     response_content = f"""
-### Initial Integration Guide for Sanctions List Screening
+#### 1. Supported interface architectures
+- JSON/REST
+- XML/SOAP
+#### 2. Trade Compliance relevant business objects
+- Business partner master data records: Individual screening or bulk check of customers and vendors (max. 100 entries per request).
+- Transactional movement data: Orders, deliveries, purchase documents, shipments with multiple addresses´.
+- Employees: Individual screening or bulk check.
+-Bank accounts: Individual screening or bulk check.
+- Financial and payment transactions: Individual screening or bulk check with multiple addresses.
+#### 3. Common triggers and processes that could initiate a screening check
+- Online check:  creation or change of a master data record or other relevant business objects (in terms of name or address fields. Business objects are checked whenever they are actively used in business processes. This allows processes to be designed to ensure consistent compliance without the need to recheck all master data records daily.
+- Batch checks: Periodic monitoring of master data records. The Batch check can be used to determine whether a previously checked partner has since been relisted – even if it hasn't been changed or used for a while. This prevents critical matches from only becoming apparent during the usage in business processes.
+- Milestone checks: In addition to change-based checks, the system performs milestone-based screening at defined process checkpoints. Each milestone acts as a screening checkpoint within the transaction lifecycle, such as before inventory reservation, picking, customs declaration, or goods issue.
+- Manual check: A user can manually initiate a check from a partner system, e.g., to correct a previous incorrect check.
 
-#### 1. Formats
-- **JSON/REST**: Use of REST API for communication.
-
-#### 2. Objects to be Screened
-- **Master Data**: Individual screening or bulk (max. 100 entries).
-- **Transactions**: Screening during creation or modification.
-
-#### 3. Fields
-- **Required Fields**:
-  - Name
-  - Address
-  - Unique Reference
-- **Screening-relevant Fields**:
-  - Address Type
-- **Optional Fields**: No specific optional fields defined.
-
-#### 4. Triggers
-- **Creation/Modification**: Automatic screening for new or changed master data and transactions.
-- **Periodic Batch Screening**: Recommended once per month.
-
-#### 5. Integration Variants
-- **a) One-way submission via screenAddresses**:
-  - Response: Hit/No hit
-  - Email to TCM recipient
-  - Manual (un)blocking required
-
-- **b) Submission + regular re-screening**:
-  - Parameter: `suppressLogging=true`
-  - Frequency: Every 60 minutes
-  - Automatic unblocking after Good-Guy classification
-
-- **c) Optional Deep-Link via screeningLogEntry**:
-  - Temporary link
-  - Integration as button/menu in partner system
-
-#### 6. Response Scenarios
-- **matchFound=true & wasGoodGuy=false**:
-  - Result: Hit found
-  - Action: (Optional) Block/Notification
-
-- **matchFound=false & wasGoodGuy=false**:
-  - Result: No hit
-  - Action: None
-
-- **matchFound=false & wasGoodGuy=true**:
-  - Result: No hit (already Good-Guy)
-  - Action: None
-
-#### Endpoints
-- **Test Endpoint**: {prov.get('test_endpoint') or '<missing>'}
-- **Prod Endpoint**: {prov.get('prod_endpoint') or '<missing>'}
-- **Client (clientIdentCode)**: {prov.get('clientIdentCode') or '<missing>'}
-- **WSM User Available**: {('Yes' if prov.get('wsm_user_configured') else 'No' if prov.get('wsm_user_configured') is not None else '<unknown>')}
-
-#### Notes
-- Log entries can be created in Compliance Screening Logs to maintain a central audit trail.
-- Technical monitoring of sanctions list currency is possible to identify issues like firewall problems.
+Our recommendation:
+- The online check should generally be implemented for all compliance-relevant business objects.
+- For logistics and transactional movement data, we recommend at least one check before goods are dispatched.
+- Regular batch checks are particularly useful if a huge number of master data records exists or if there are rarely used in movement data.
+#### 4. Specification of mandatory, check relevant and optional fields
+- mandatory fields: name
+- check relevant fields: name, name1, name2, name3, name4, addressType, street, pc, city, countryISO, postbox, pcPostbox, condition and ids
+- recommended optional fields: referenceId, referenceComment, info
 """
 
     return {
@@ -800,8 +744,8 @@ def ask_screening_variants_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see screening variants explanation."""
     payload = interrupt({
         "type": "show_screening_variants",
-        "title": "2. Recommended Options for API Usage",
-        "prompt": "Would you like to see the detailed Recommended Options for API Usage (3 integration variants)? (Yes or Skip)",
+        "title": "Step 5: Recommended Options for API Usage",
+        "prompt": "We start with step 5. The Compliance Screening API can be integrated into the processes of a partner system in **three different scenarios**.\n\n**Would you like to see this information?**",
     })
 
     skip = None  # None means show content, True means skip, False means loop
@@ -859,7 +803,7 @@ Available configuration:
 Available documentation excerpts:
 {snippets_text}
 
-Answer the question based on the available information. 
+Answer the question based on the available information.
 IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
 """)
 
@@ -897,55 +841,49 @@ def route_from_ask_screening_variants(state: ApiMappingState) -> str:
 def explain_screening_variants_node(state: ApiMappingState) -> dict:
     """Explain the three screening variants for API integration."""
     response_content = """
-### Recommended Options for API Usage
 
-#### 1. One-Way Transfer Without Rechecks
 
-In the first option, data is transferred from a partner system to **Trade Compliance Management** on a one-way basis only. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
+# 1. One-way transfer without rechecks
+In the first option, data is transferred from a partner system to Trade Compliance Management on a one-way basis only. The API request can contain certain relevant business partners(customers, suppliers, employees, etc.) or transactional data(e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
-A business partner check is then performed and logged in TCM. The result of the check can be a match or non-match, which is reported directly in the API Response message. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected (`"matchFound": true, "wasGoodGuy": false`).
+A business partner check is then performed and logged in TCM. The result of the check can be a match or non-match, which is reported directly in the API Response message. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected("matchFound": true, "wasGoodGuy": false).
+In the event of a match, an email is also sent to an email recipient configured in TCM(company's compliance officer), who then processes the matches in TCM (defines a good guy for false positives or marks them as true matches). This procedure only requires the REST API screenAddresses (or SOAP API RexBF-batchMatch) that must be called once per business object (master data record or transactional data). The object must be released in the partner system or finally stopped or deleted manually by a user after the match handling in Trade Compliance Management.
 
-In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in TCM (defines a **good guy** for false positives or marks them as true matches). This procedure only requires the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) that must be called once per business object (master data record or transactional data). The object must be released in the partner system or finally stopped or deleted manually by a user after the match handling in **Trade Compliance Management**.
-
-#### 2. Transfer with Response Evaluation and Periodic Rechecks
-
+#### 2. Transfer with response evaluation and periodic rechecks
 In the second variant, data is transferred from the partner system and, in addition, open matches are regularly checked so that they can not only be blocked but also unblocked in the partner system. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
-A business partner check is then performed, which is logged in TCM. The result of the check can be a match or a non-match, which is reported directly in the response. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected (`"matchFound": true, "wasGoodGuy": false`).
+A business partner check is then performed, which is logged in TCM. The result of the check can be a match or a non-match, which is reported directly in the response. If necessary, the object can be blocked or stopped in the partner system or a notification can be displayed directly to a user if a potential match is detected ("matchFound": true, "wasGoodGuy": false).
 
-In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in **Trade Compliance Management** (defines a **good guy** for false positives or marks them as true matches). This procedure requires the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) that have to be used several times.
-
+In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in Trade Compliance Management (defines a good guy for false positives or marks them as true matches). This procedure requires the REST API screenAddresses (or SOAP API RexBF-batchMatch) that have to be used several times.
 - First, the initial check must be performed.
-- For business objects that received a match during the initial check (`"matchFound": true, "wasGoodGuy": false`), a periodic recheck must be performed so that a subsequent noncritical check result can be determined in the partner system after the match processing in TCM.
-- This recheck must be done until the check result gets uncritical (`"matchFound": false, "wasGoodGuy": true`).
+- For business objects that received a match during the initial check ("matchFound": true, "wasGoodGuy": false), a periodic recheck must be performed so that a subsequent noncritical check result can be determined in the partner system after the match processing in TCM.
+- This recheck must be done until the check result gets uncritical ("matchFound": false, "wasGoodGuy": true).
+This enables an automatic unblocking of the business object in the partner system after the good guy definition. The partner system must save the critical check results for address matches. The suggested frequency for the recheck is every 60 minutes. In addition, the parameter suppressLogging of the REST API screenAddresses (or SOAP API RexBF-batchMatch) should be sent with the value true for periodic rechecks so that the periodic checks are not counted in addition to the invoiceable check volume.
 
-This enables an automatic unblocking of the business object in the partner system after the **good guy** definition. The partner system must save the critical check results for address matches. The suggested frequency for the recheck is every 60 minutes. In addition, the parameter `suppressLogging` of the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) should be sent with the value `true` for periodic rechecks so that the periodic checks are not counted in addition to the invoiceable check volume.
+#### 3. Transfer with direct access to match handling from partner system
+The third option can be implemented as a supplement to the first or second variant. After a compliance screening check of a business objects with the REST API screenAddresses (or SOAP API RexBF-batchMatch), the response can be evaluated in the partner system if there are potential matches ("matchFound": true, "wasGoodGuy": false). This use case assumes that a user accesses the match handling directly from the partner system. In the partner system, the user should not only be shown the match, but there should also be a button or menu function to call up the match handling in Trade Compliance Management. 
 
-#### 3. Transfer with Direct Access to Match Handling
+There are two ways to embed the match handling UI of Trade Compliance Management so that users can open it from partner systems:
 
-The third option can be implemented as a supplement to the first or second variant. After a compliance screening check of a business object with the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`), the response can be evaluated in the partner system if there are potential matches (`"matchFound": true, "wasGoodGuy": false`).
+The first option is to open the match handling UI for a specific address match if users want to access a specific business object in order to process or define the Good Guy just for this one address.  Therefore the screeningLogEntry API can be used to generate and open a web link to the match handling UI for one specific address match. Since the web link is only valid temporarily, the API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system.
 
-This use case assumes that a user accesses the match handling directly from the partner system. In the partner system, the user should not only be shown the match, but there should also be a button or menu function to call up the match handling in **Trade Compliance Management**. The `screeningLogEntry` API can be used to generate and open a web link to the match handling UI in **Trade Compliance Management**. Since the web link is only valid temporarily, the API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system.
+The second option is to open the match handling UI which displays an overview of all open matches (worklist). This integration is ideal for making a central function or tile available to users in the partner system. Two APIs are available for integrating the match handling overview. The countMatchHandlingMatches API can be used to determine the number of open matches. Therefore, the API should be called periodically (e.g., once per minute). This allows the partner system to display whether and how many open matches need to be processed. In addition, the matchHandlingView API can then be used to open the match handling overview, which displays all open matches from the last compliance screening checks.  That API API can be used to generate and open a web link to the access the match handling UI. Since the web link is only valid temporarily, the matchHandlingView API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system. Both APIs (countMatchHandlingMatches and matchHandlingView) supports transmitting a stored view as parameter. Individual views can be configured in the match handling UI before the API is used (e.g., if a separation of address matches and good guy alert events is preferred or if specific compliance profiles or organizational units shall be enabled).
 
-### Our Recommendations
-
-#### For Simple Implementations
-**Choose Variant 1** if you have:
+Our recommendation: 
+#### For Simple Implementations choose variant 1 if you have:
+- Basic compliance requirements
 - Limited development resources
 - Low transaction volumes
 - Acceptable manual compliance workflow
-- Basic compliance requirements
-
-#### For Automated Workflows  
-**Choose Variant 2** if you have:
+#### For Automated workflows choose variant 2 if you have:
+- High compliance requirements for seamless process integration, including blocking and unblocking behavior of business objects
 - High transaction volumes
 - Need for automated unblocking
 - Dedicated compliance team
 - Advanced integration capabilities
-
-#### For Optimal User Experience
-**Add Variant 3** to either Variant 1 or 2 if you want:
-- Seamless user experience
+#### For optimal User Experience add variant 3 to either variant 1 or 2 if you want:
+- Useful if compliance match processing is performed by the same user who is also responsible for the business object in the partner system (e.g., creator of a sales order)
+- Seamless user experience in the partner system
 - Direct access to match handling
 - Reduced context switching
 - Enhanced compliance efficiency
@@ -960,8 +898,8 @@ def ask_responses_node(state: ApiMappingState) -> dict:
     """Ask user if they want to see response scenarios explanation."""
     payload = interrupt({
         "type": "show_responses",
-        "title": "3. Response Scenarios Explanation",
-        "prompt": "Would you like to see the detailed Response Scenarios explanation? (Yes or Skip)",
+        "title": "Step 6: Response Scenarios Explanation",
+        "prompt": "We start with step 6. The response messages from the Compliance Screening API differ depending on whether the check result has identified a potential match or an uncritical check result.\n\n**Would you like to see an explanation of the detailed response scenarios?**",
     })
 
     skip = None  # None means show content, True means skip, False means loop
@@ -1019,7 +957,7 @@ Available configuration:
 Available documentation excerpts:
 {snippets_text}
 
-Answer the question based on the available information. 
+Answer the question based on the available information.
 IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
 """)
 
@@ -1061,7 +999,7 @@ def explain_responses_node(state: ApiMappingState) -> dict:
 
 #### Scenario 1: Potential Match Detected
 
-The following response message describes the scenario where a potential address match has been detected. A match handling in Trade Compliance Management is required and the object in the partner system should be blocked:
+The following response message describes the scenario where a potential address match has been detected. A match handling in Trade Compliance Management is required and the object in the partner system should be blocked. The check will be logged in Trade Compliance Management for further audit purposes. If process blocks are used, users should be able to see the compliance status (critical/non-critical) of the business objects in the partner system. You can configure an email distribution list in Trade Compliance Management to notify a compliance officer:
 
 ```json
   {
@@ -1072,9 +1010,9 @@ The following response message describes the scenario where a potential address 
   }
 ```
 
-#### Scenario 2: No Match Found
+#### Scenario 2: No match found (uncritical check result)
 
-The following scenario detects an uncritical address where no further action in Trade Compliance Management is required and where the business object in the partner system can be further processed and used:
+The following scenario detects an uncritical address where no further action in Trade Compliance Management is required. The check will be logged for further audit purposes. The business object in the partner system can be further processed and used (no stop required):
 
 ```json
   {
@@ -1085,9 +1023,9 @@ The following scenario detects an uncritical address where no further action in 
   }
 ```
 
-#### Scenario 3: Good Guy Definition
+#### Scenario 3: No match due to good guy definition
 
-The third scenario detects an uncritical address due to a previous good guy definition in Trade Compliance Management. The business object in the partner system can be further processed and used:
+The third scenario detects an uncritical address due to a previous good guy definition in Trade Compliance Management. The check will be logged for further audit purposes. The business object in the partner system can be further processed and used:
 
 ```json
   {
@@ -1107,25 +1045,36 @@ The third scenario detects an uncritical address due to a previous good guy defi
 def api_mapping_intro_node(state: ApiMappingState) -> dict:
     """Introduce the API mapping service and gather initial system information."""
     response_content = """
-## 🔄 API Mapping Service
-
-Now we can help you map your existing API structure to the AEB TCM Screening API.
-
-**What we need:**
-
-### 1. System Information
+We can now start with step 7. This step will help you to map your existing object model onto the AEB TCM Compliance Screening API. After uploading the metadata for the business object to be checked from your partner system, the assistant can perform a mapping to the AEB API, creating a mapping table including transformation logic and implementation notes, as well as a complete REST call.
+### What we need to start the mapping:
+#### 1. Context Information
 Please describe:
-- **System Name/Type:** Which system do you want to connect? (e.g. SAP, Salesforce, Custom ERP)
-- **Process:** Which business process should be integrated? (e.g. Customer creation, Order processing, Supplier verification)
 
-### 2. API Metadata
-We need your existing API structure in one of the following formats:
-- **JSON Schema** of your address/partner data
-- **XML Example** of a typical data request
-- **CSV Structure** with field names and descriptions
-- **OpenAPI/Swagger** definition
+Partner System (name or type): Which system do you want to connect (e.g. SAP, Salesforce, Custom ERP)?  Relevant Business object:Which business objects you want to check (e.g. business partner master data records, bank accounts, orders, deliveries, Bank accounts)  Business process: Which business process should be integrated? (e.g. Online check, batch check)
 
-**Next Step:** Please first provide your **system name** and the **process to be integrated**.
+#### 2. Business Object Metadata
+
+You could upload your existing object model in one of the following formats:
+- JSON Schema of your address/partner data
+- XML Example of a typical data request
+- CSV Structure with field names and descriptions
+- OpenAPI/Swagger definition
+
+Example format:
+```json
+{
+    "id": "GUID",
+    "number": "string",
+    "customerName": "string",
+    "addressLine": "string",
+    "city": "string",
+    "country": "string",
+    "phoneNumber": "string",
+    "email": "string"
+}
+```
+
+Next Step: Please first **provide** your partner system name, business object** and the **process to be integrated**. You can then **upload a file** containing your metadata and start the mapping request by clicking the **Perform mapping with uploaded data button.**
 """
 
     return {
@@ -1221,7 +1170,7 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
     **Relevant excerpts from customer API metadata (via RAG):**
     {api_data_snippets if api_data_snippets else '[No relevant API data found]'}
 
-    **Note:** The complete API metadata was too large for direct analysis. 
+    **Note:** The complete API metadata was too large for direct analysis.
     The above excerpts were selected based on relevance for address and name fields.
     """
     else:
@@ -1232,88 +1181,88 @@ def process_and_map_api_node(state: ApiMappingState) -> dict:
     sys = SystemMessage(content=(
         f"""
 # Compliance API Mapping System Prompt
- 
+
 You are an expert AI assistant specialized in helping customers map their internal business data to AEB Trade Compliance Management APIs for Compliance Screening. Your primary role is to analyze customer data schemas and generate precise field mappings to ensure accurate compliance screening results.
- 
+
 ## General Information about AEB TCM Screening API
- 
+
 {get_general_information_about_screening_api()}
- 
+
 ## AEB endpoint (api_screen_addresses_spec)
- 
+
 {get_screen_addresses_spec()}
- 
+
 ## AEB API calls examples
- 
+
 {get_api_examples()}
- 
+
 ## Core Capabilities
- 
+
 ### 1. Data Schema Analysis
 - Analyze customer's internal data structures (JSON, XML, CSV, database schemas, etc.)
 - Identify relevant fields in customers data to mapp them to the APIs for Compliance Screening
 - Understand data types, formats, and business context
 - Recognize incomplete or fragmented data Patterns
-- Always ask which objects are to be mapped if you cannot determine this yourself, e.g., whether the mapping is to be created for master data of business partners or for transactional movement objects such as an order. This is to ensure that the reference fields and conditions can be filled as meaningfully as possible. 
+- Always ask which objects are to be mapped if you cannot determine this yourself, e.g., whether the mapping is to be created for master data of business partners or for transactional movement objects such as an order. This is to ensure that the reference fields and conditions can be filled as meaningfully as possible.
 - Always check with the user if you are unsure about certain fields from the uploaded meta data files and therefore cannot reliably assign all fields relevant for verification.
- 
+
 ### 2. API Field Mapping Instructions
- 
+
 You have deep knowledge of the AEB Compliance Screening API structure and can use the provided examples.
- 
+
 - Before you provide a mapping try to determine the relevant general API parameters which are required for the screeningParameters such as clientIdentCode, clientSystemId and profileIdentCode. If they were not entered yet than ask the user who would like to get the API mapping. If you ask for this parameters than ask for the needed field and always provide an explanation of what this field is about. DEFAULT as profileIdentCode will always exists if the user does not know it.
 - Each mapping should include the general API Parameters (REST screeningParameters, SOAP parms) as well as the business partner address data (REST addresses, SOAP patterns). The general API parameters and the business partner address data should be listed.
 - The business partner address data should contain at least the mandatory fields, check relevant fields and the recommended optional fields.
 - If you provide a mapping than generate an overview in the form of `Screening Parameters table` and a separate `Field Mapping Table` and addtional a complete REST request.
-  
+
 ### 3. Mapping Generation
- 
+
 Create comprehensive mappings that include:
 - **Direct mappings** - Exact field-to-field matches
 - **Transformation mappings** - Data format conversions, concatenations, splits
 - **Conditional mappings** - Logic-based field popula
 - **Default values** - Standard values for missing fields
 - **Validation rules** - Data quality checks
- 
+
 ### 4. Best Practices & Optimization
- 
+
 - Prioritize accuracy over completeness
-- Always include mandatory fields, check relevant fields and the recommended optional fields as part of the mapping. 
+- Always include mandatory fields, check relevant fields and the recommended optional fields as part of the mapping.
 - Use `addressType` correctly: `entity` for companies, `individual` for persons. The adressType must be inluded in each Field Mapping Table.
 - Leverage `name1`-`name4` for better matching accuracy when possible.
 - Include address fields (`street`, `pc`, `city`, `countryISO`) for precision.
 - Always try to identify good distinguishing `ids`, as this significantly increases the Screening check accuracy and reduces false similarities.
-- If you find an e-mail adddress within the uploaded meta data then map it to the field email and to the field ids with idType `DOMAIN_NAME`. 
-- If you find a website within the uploaded meta data then map it to the field ids with idType `DOMAIN_NAME`. 
-- If you find more the one name field within the uploaded data for entities then fill the field `name` as a concatenation of `name1`, `name2`, `name3` and `name4". The single name fields should be listed separately as well. 
+- If you find an e-mail adddress within the uploaded meta data then map it to the field email and to the field ids with idType `DOMAIN_NAME`.
+- If you find a website within the uploaded meta data then map it to the field ids with idType `DOMAIN_NAME`.
+- If you find more the one name field within the uploaded data for entities then fill the field `name` as a concatenation of `name1`, `name2`, `name3` and `name4". The single name fields should be listed separately as well.
 - If you find more the one name field within the uploaded data for persons then fill the field `name` as a concatenation of `surname` and `prenames`. The single name fields should be listed separately as well.
-- If the uploaded meta data includes information for more than one address (including name, number, street, city, country) then they have to be provided as an array within the REST example request. So the adresses field in the request should contain multiple objects (e.g. for ship-to party, bill-to party, sell-to party).  
+- If the uploaded meta data includes information for more than one address (including name, number, street, city, country) then they have to be provided as an array within the REST example request. So the adresses field in the request should contain multiple objects (e.g. for ship-to party, bill-to party, sell-to party).
 - If the uploaded meta data includes information for more than one address of a business partner (e.g. ship-to party, bill-to party, sell-to party) then the fields `name`, `street`, `pc`, `city`, `country` can have several entries within column `Customer field` of the Field Mapping Table.
 - Try to fill `referenceId` and `referenceComment` for for good traceability. Always refer to the available examples.
 - For mapping the `referenceId` field, the uploaded data should be checked to see if it contains an id, internal ID, internal identifier, GUID, UUID, or unique ID, as it should be populated with the technical identification number of the object. If there are more than one field that could be used as `referenceId` then list them within column `Customer field` of the Field Mapping Table. The referenceId must be inluded in each Field Mapping Table.
 - For mapping the `referenceComment` field, the uploaded data should be checked to see if it contains a field named as reference number or number of the business object (e.g. customer, vendor, partner, sales order, shipment, delivery, purchase order) which should then be used for the mapping. If the uploaded meta data includes information for more than one address of a business partner (e.g. ship-to party, bill-to party, sell-to party) then the content of this field should be composed of the object number (e.g. sales order number, shipment number) and partner role (e.g. ship-to party) to one combined information (sales order number - ship-to party number or name). The referenceComment must be inluded in each Field Mapping Table.
 - If the uploaded meta data includes information about identification number such as national tax numbers of companies (`idType`= TAX_NO), DUNS numbers of companies (`idType`= DUNS_NO), SWIFT code for banks (`idType`= BIC), passport numbers belonging to individuals (`idType`= PASSPORT_NO), IMO numbers for vessels (`idType`= IMO_NO) or email addresses or websites (`idType`= DOMAIN_NAME) that could be used as `ids` then list them with `idType` and `idValue`within column `Customer field` of the Field Mapping Table.
-- Consider `condition` for context-specific good guys. The field `condition` with `description` and `value` must be included in each Field Mapping Table. 
+- Consider `condition` for context-specific good guys. The field `condition` with `description` and `value` must be included in each Field Mapping Table.
 - The context for conditions of master data records (e.g. customer, vendor, employee, banks) is usually a combination of business object type and reference number that can be used as a condition (e.g `value` = customer_number,`description` = customer: number).
 - The usecase for conditions of transactional movement data (e.g. sales orders, deliveries, purchase oders, shipmemts) is the continuous applicability of a good guy for business objects that are related in a document flow (eg Quotation → Order → Delivery) so that the conditional exemption also applies to subsequent documents. It is common practice to derive the condition from the first document in the flow (e.g quotation oder sales order). Therefore, the field filling of the condition for transactional movement data should be a combination of business object type and reference number (e.g `value` = salesorder_number, `description` = sales order: number).
- 
+
 ## Response Format
- 
+
 When generating mappings, provide:
- 
+
 1. **Mapping Overview** - Summary of the mapping approach
 2. **Screening Parameters table** - Detailed information about the content of the general API parameters (screeningParameters).  The table should list all available field and should have the following columns:
 - `API field AEB` -> Technical name from the Trade Compliance Management API
 - `Mantatory field` -> Labeling whether yes or no
-- `Example` -> Field content either from the available data entered by the user or use default values provides by the examamples. 
-3. **Field Mapping Table** - Detailed source-to-target Mappings. The field mapping table should have the following columns: 
+- `Example` -> Field content either from the available data entered by the user or use default values provides by the examamples.
+3. **Field Mapping Table** - Detailed source-to-target Mappings. The field mapping table should have the following columns:
 - `API field AEB` -> Technical name from the Trade Compliance Management API
-- `Customer field` -> Technical name from from the meta deta file uploaded by the user 
+- `Customer field` -> Technical name from from the meta deta file uploaded by the user
 - `Mandatory field` -> Labeling whether yes or no
 - `Check relevant field` -> Labeling whether yes or no
 - `Transformation info` -> should contain explanations as well as notes, e.g., if fields have been combined, such as address line 1 and address line 2 into one field for street name.
-- `Example` -> Field content either from the meta deta file uploaded by the user or from an example 
-4. **A complete REST request ** 
+- `Example` -> Field content either from the meta deta file uploaded by the user or from an example
+4. **A complete REST request **
 - Example API request with mapped data. The REST request must contain the request header and the body.
 - You must also write a example request with a cURL syntax like this, where the headers and the links are included:
 ```bash
@@ -1330,12 +1279,12 @@ where you use the test-endpoint provided by the user as URL (Test endpoint: {pro
 6. **Validation & Quality Checks** - Recommended data validation
 7. **Implementation Notes** - Important considerations edge cases
 8. **Output of events involving business objects** - Events which are reasonable triggers for a Compliance Screening check
- 
+
 
 ## Specification of mandatory, check relevant fields an optional fields for Field Mapping Table
-- Mantatory fields: 
+- Mantatory fields:
     - `name` -> ONLY the name field is mandatory.
-- Check relevant fields: 
+- Check relevant fields:
 - `name` -> is check relevant AND mandatory
 - `name1` -> is check relevant
 - `name2` -> is check relevant
@@ -1353,9 +1302,9 @@ where you use the test-endpoint provided by the user as URL (Test endpoint: {pro
 - Recommended optional fields: `referenceId`, `referenceComment`, `info`.
 
 ## Understanding Compliance Screening check
- 
+
 One of the main functions of Trade Compliance Management is the product Compliance Screening. Compliance Screening lets you screen your business partners against various restricted party lists. The following synonyms can be used to describe this function:
- 
+
 - Screening check
 - Compliance Screening check
 - Restricted party screening (RPS)
@@ -1365,11 +1314,11 @@ One of the main functions of Trade Compliance Management is the product Complian
 - Business partner check
 - Watchlist Screening
 - Blacklist Screening
- 
+
 All these terms include the checking of both individuals, companies and means of transports, i.e., master data records and transactional movement data can be checked with them.
- 
+
 ## Important Guidelines
- 
+
 - **Always ask clarifying questions** about ambiguous customer data
 - **Validate data quality** requirements and suggest improvements
 - **Consider compliance context** - different screening needs may require different approaches
@@ -1378,25 +1327,25 @@ All these terms include the checking of both individuals, companies and means of
 - **Indicate the limitation of the master data check** for bulk operations. A typical batch size could be 100 addresses. However, if you plan to use very big restricted party lists (e.g. from Dow Jones), it may be neccessary to choose smaller block sizes to get acceptable response times.
 - **Suggest data enrichment for check relevant and recommended fields** where beneficial
 - **Only relevant information** should be mapped if possible (mandatory fields, check relevant fields, recommended reference fields, and useful optional fields). If further information is available in the meta data provided by customers (e.g., items, block statuses, dates), this should not be used in the mapping.
- 
+
 ## Common Scenarios
- 
+
 1. **Master Data Records** - Periodic screening check of business Partners (customers, vendors)
 2. **New Master Data Records** - Screening check during the onboarding of new business partners (customers, vendors)
 3. **Transactional Movement Data Screening** - Event based screening check of transactional movement data (orders, deliveries, shipments, purchase orders) with multiple addresses
 4. **Employee Screening** - Periodic creening check employees of the company itself
 5. **Bank Screening** - Periodic Screening check of bank records
 6. **Financial Transactions** - Screening check with the participating partners (bank details and payees) before the payment run for all due payments
- 
+
 ## Error Handling & Edge Cases
- 
+
 - Handle missing mandatory fields gracefully
 - Suggest data normalization for better matching
 - Account for international address formats
 - Consider name variations and aliases
 - Handle incomplete person vs. entity classification
 - Manage data encoding and character set issues
- 
+
 Remember: Your goal is to maximize screening accuracy while minimizing false positives, ensuring compliance requirements are met efficiently and effectively.
         """
     ))
@@ -1533,7 +1482,7 @@ Available configuration:
 Available documentation excerpts:
 {snippets_text}
 
-Answer the question based on the available information. 
+Answer the question based on the available information.
 IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
 """)
 
@@ -1554,4 +1503,4 @@ def route_from_qa_mode(state: ApiMappingState, config: RunnableConfig) -> str:
     decision = state.get("decision")
     if decision == "continue":
         return state.get("next_node_after_qa")
-    return NodeNames.QA_MODE
+    return NodeNames.QA_MODE                                                                
