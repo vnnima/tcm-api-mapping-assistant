@@ -129,12 +129,23 @@ def render_interrupt_controls_if_pending() -> bool:
             st.session_state.is_resuming = True
             st.session_state.trigger_rerun = True
 
+        def _resume_skip_endpoints():
+            st.session_state.resume_payload = {"response": "skip"}
+            st.session_state.is_resuming = True
+            st.session_state.trigger_rerun = True
+
         st.text_input("Test Endpoint URL:", key="test_url_input",
                       placeholder="https://test.aeb.com/...")
         st.text_input("Production Endpoint URL:", key="prod_url_input",
                       placeholder="https://prod.aeb.com/...")
-        st.button("✅ Submit Endpoints", type="primary", key="interrupt_submit_endpoints",
-                  on_click=_resume_with_endpoints)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.button("✅ Submit Endpoints", type="primary", key="interrupt_submit_endpoints",
+                      on_click=_resume_with_endpoints)
+        with col2:
+            st.button("⏭️ Skip (use default endpoints)", key="interrupt_skip_endpoints",
+                      on_click=_resume_skip_endpoints)
 
         # If there's a validation error from submit, show it inline below the controls
         if st.session_state.get("endpoint_submit_error"):

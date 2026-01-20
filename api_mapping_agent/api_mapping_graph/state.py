@@ -26,6 +26,8 @@ class ApiMappingState(TypedDict):
     api_file_path: str | None
 
     # Skip flags for information nodes
+    skip_intro: bool | None
+    skip_endpoints: bool | None
     skip_client: bool | None
     skip_wsm: bool | None
     skip_general_info: bool
@@ -35,3 +37,5 @@ class ApiMappingState(TypedDict):
     started: bool
     completed: bool
     rag_snippets: List[str]
+
+    mapping_result: str | None

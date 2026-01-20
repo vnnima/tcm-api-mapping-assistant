@@ -4,10 +4,10 @@ from api_mapping_agent.api_mapping_graph.decision_interrupt_node import decision
 from api_mapping_agent.api_mapping_graph.nodes import (
     NodeNames,
     api_mapping_intro_node,
+    ask_endpoints_node,
     explain_responses_node,
     explain_screening_variants_node,
     intro_node,
-    clarify_node,
     ask_client_node,
     ask_wsm_node,
     ask_general_info_node,
@@ -16,8 +16,8 @@ from api_mapping_agent.api_mapping_graph.nodes import (
     ask_responses_node,
     process_and_map_api_node,
     qa_mode_node,
+    route_from_endpoints,
     route_from_intro,
-    route_from_clarify,
     route_from_client,
     route_from_wsm,
     route_from_ask_general_info,
@@ -36,7 +36,7 @@ def build_graph():
     g = StateGraph(ApiMappingState)
 
     g.add_node(NodeNames.INTRO, intro_node)
-    g.add_node(NodeNames.CLARIFY, clarify_node)
+    g.add_node(NodeNames.ASK_ENDPOINTS, ask_endpoints_node)
     g.add_node(NodeNames.ASK_CLIENT, ask_client_node)
     g.add_node(NodeNames.ASK_WSM, ask_wsm_node)
     g.add_node(NodeNames.ASK_GENERAL_INFO, ask_general_info_node)
@@ -50,25 +50,20 @@ def build_graph():
     g.add_node(NodeNames.DECISION_INTERRUPT, decision_interrupt_node)
     g.add_node(NodeNames.GET_API_DATA_INTERRUPT, get_api_data_interrupt_node)
     g.add_node(NodeNames.PROCESS_AND_MAP_API, process_and_map_api_node)
-
     g.add_node(NodeNames.QA_MODE, qa_mode_node)
 
     g.add_edge(START, NodeNames.INTRO)
 
     g.add_conditional_edges(NodeNames.INTRO, route_from_intro, {
+        NodeNames.INTRO: NodeNames.INTRO,  # Loop back for questions
+        NodeNames.ASK_ENDPOINTS: NodeNames.ASK_ENDPOINTS,
         NodeNames.QA_MODE: NodeNames.QA_MODE,
-        NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
-        NodeNames.ASK_WSM: NodeNames.ASK_WSM,
-        NodeNames.CLARIFY: NodeNames.CLARIFY,
-        NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,
-        NodeNames.PROCESS_AND_MAP_API: NodeNames.PROCESS_AND_MAP_API,
         "__end__": END
     })
-    g.add_conditional_edges(NodeNames.CLARIFY, route_from_clarify, {
-        NodeNames.CLARIFY: NodeNames.CLARIFY,
-        NodeNames.INTRO: NodeNames.INTRO,
+    g.add_conditional_edges(NodeNames.ASK_ENDPOINTS, route_from_endpoints, {
+        NodeNames.ASK_ENDPOINTS: NodeNames.ASK_ENDPOINTS,
         NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
-        "__end__": END
+        "__end__": END,
     })
     g.add_conditional_edges(NodeNames.ASK_CLIENT, route_from_client, {
         NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,  # Loop back for questions
@@ -77,7 +72,6 @@ def build_graph():
     })
     g.add_conditional_edges(NodeNames.ASK_WSM, route_from_wsm, {
         NodeNames.ASK_WSM: NodeNames.ASK_WSM,  # Loop back for questions
-        NodeNames.CLARIFY: NodeNames.CLARIFY,
         NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,
         "__end__": END
     })
@@ -110,12 +104,16 @@ def build_graph():
     g.add_conditional_edges(NodeNames.QA_MODE, route_from_qa_mode, {
         NodeNames.INTRO: NodeNames.INTRO,
         NodeNames.ASK_CLIENT: NodeNames.ASK_CLIENT,
+        NodeNames.ASK_WSM: NodeNames.ASK_WSM,
         NodeNames.ASK_GENERAL_INFO: NodeNames.ASK_GENERAL_INFO,
         NodeNames.EXPLAIN_SCREENING_VARIANTS: NodeNames.EXPLAIN_SCREENING_VARIANTS,
         NodeNames.EXPLAIN_RESPONSES: NodeNames.EXPLAIN_RESPONSES,
         NodeNames.API_MAPPING_INTRO: NodeNames.API_MAPPING_INTRO,
         NodeNames.PROCESS_AND_MAP_API: NodeNames.PROCESS_AND_MAP_API,
+        NodeNames.ASK_SCREENING_VARIANTS: NodeNames.ASK_SCREENING_VARIANTS,
+        NodeNames.ASK_RESPONSES: NodeNames.ASK_RESPONSES,
         NodeNames.QA_MODE: NodeNames.QA_MODE,
+        "__end__": END
     })
 
     # return g.compile(checkpointer=checkpointer) # TODO: Don't need this with Langgraph API
