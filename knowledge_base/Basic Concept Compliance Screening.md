@@ -1,8 +1,8 @@
 # Basic Concept Compliance Screening
 
-### Recommended Options for API Usage
+## Recommended Options for API Usage
 
-#### 1. One-Way Transfer Without Rechecks
+### 1. One-Way Transfer Without Rechecks
 
 In the first option, data is transferred from a partner system to **Trade Compliance Management** on a one-way basis only. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
@@ -10,7 +10,7 @@ A business partner check is then performed and logged in TCM. The result of the 
 
 In the event of a match, an email is also sent to an email recipient configured in TCM (company's compliance officer), who then processes the matches in TCM (defines a **good guy** for false positives or marks them as true matches). This procedure only requires the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) that must be called once per business object (master data record or transactional data). The object must be released in the partner system or finally stopped or deleted manually by a user after the match handling in **Trade Compliance Management**.
 
-#### 2. Transfer with Response Evaluation and Periodic Rechecks
+### 2. Transfer with Response Evaluation and Periodic Rechecks
 
 In the second variant, data is transferred from the partner system and, in addition, open matches are regularly checked so that they can not only be blocked but also unblocked in the partner system. The API request can contain certain relevant business partners (customers, suppliers, employees, etc.) or transactional data (e.g., orders with multiple business partners). The data set should include the name, address information, a unique reference, IDs, conditions, and the address type.
 
@@ -24,13 +24,17 @@ In the event of a match, an email is also sent to an email recipient configured 
 
 This enables an automatic unblocking of the business object in the partner system after the **good guy** definition. The partner system must save the critical check results for address matches. The suggested frequency for the recheck is every 60 minutes. In addition, the parameter `suppressLogging` of the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`) should be sent with the value `true` for periodic rechecks so that the periodic checks are not counted in addition to the invoiceable check volume.
 
-#### 3. Transfer with Direct Access to Match Handling
+### 3. Transfer with Direct Access to Match Handling
 
-The third option can be implemented as a supplement to the first or second variant. After a compliance screening check of a business object with the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`), the response can be evaluated in the partner system if there are potential matches (`"matchFound": true, "wasGoodGuy": false`).
+The third option can be implemented as a supplement to the first or second variant. After a compliance screening check of a business objects with the REST API screenAddresses (or SOAP API `RexBF-batchMatch`), the response can be evaluated in the partner system if there are potential matches (`"matchFound": true, "wasGoodGuy": false`). This use case assumes that a user accesses the match handling directly from the partner system. In the partner system, the user should not only be shown the match, but there should also be a button or menu function to call up the match handling in Trade Compliance Management. 
 
-This use case assumes that a user accesses the match handling directly from the partner system. In the partner system, the user should not only be shown the match, but there should also be a button or menu function to call up the match handling in **Trade Compliance Management**. The `screeningLogEntry` API can be used to generate and open a web link to the match handling UI in **Trade Compliance Management**. Since the web link is only valid temporarily, the API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system.
+There are two ways to embed the match handling UI of Trade Compliance Management so that users can open it from partner systems:
 
-### Basic Concept
+The first option is to open the match handling UI for a specific address match if users want to access a specific business object in order to process or define the Good Guy just for this one address.  Therefore the screeningLogEntry API can be used to generate and open a web link to the match handling UI for one specific address match. Since the web link is only valid temporarily, the API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system.
+
+The second option is to open the match handling UI which displays an overview of all open matches (worklist). This integration is ideal for making a central function or tile available to users in the partner system. Two APIs are available for integrating the match handling overview. The countMatchHandlingMatches API can be used to determine the number of open matches. Therefore, the API should be called periodically (e.g., once per minute). This allows the partner system to display whether and how many open matches need to be processed. In addition, the matchHandlingView API can then be used to open the match handling overview, which displays all open matches from the last compliance screening checks.  That API API can be used to generate and open a web link to the access the match handling UI. Since the web link is only valid temporarily, the matchHandlingView API should only be called when the user wants to start the match handling by clicking on the function introduced in the partner system. Both APIs (countMatchHandlingMatches and matchHandlingView) supports transmitting a stored view as parameter. Individual views can be configured in the match handling UI before the API is used (e.g., if a separation of address matches and good guy alert events is preferred or if specific compliance profiles or organizational units shall be enabled). 
+
+## Basic Concept
 
 The main request of Compliance Screening API is bulk address screening via REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`). This works for single addresses (just one check of a business partner) as well as with larger amounts of addresses (master data check for many business partners).
 
@@ -54,7 +58,7 @@ In our experience, the following events involving business objects are reasonabl
 - New creation of a transactional object (order, delivery, purchase order, shipment)
 - Relevant change to a business partner within a transactional object (change of name or address details or adding a new business partner)
 
-#### Match Handling and Good Guy Definition in Trade Compliance Management
+### Match Handling and Good Guy Definition in Trade Compliance Management
 
 The entire process of **match handling** and **good guy** definition can be handled directly in the **Trade Compliance Management** web application.
 
@@ -64,7 +68,7 @@ The second option means that the checked address really corresponds with the res
 
 If this workflow fulfills the needs of your company, the process of **match handling** in the partner system will not be needed at all. Only the blocking logic should be implemented if needed and repeated calls for address screening. You only have to implement the REST API `screenAddresses` (or SOAP API `RexBF-batchMatch`).
 
-#### Match Handling and Good Guy Definition in Partner System
+### Match Handling and Good Guy Definition in Partner System
 
 You can also develop the views and logic to allow users to do **match handling** and **Good Guy** definition within your software. There are several API requests which can support users with **match handling** in the partner system.
 
