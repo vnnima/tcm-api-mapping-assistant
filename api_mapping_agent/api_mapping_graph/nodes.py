@@ -1468,10 +1468,11 @@ def qa_mode_node(state: ApiMappingState) -> dict:
         "Answer questions about the TCM Screening API precisely and helpfully in English. "
         "ALWAYS use the available documentation excerpts and configuration data. "
         "If documentation is available, base your answer on it and not on general knowledge."
+        "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details."
     ))
 
     snippets_text = "\n\n".join([f"Dokument {i+1}:\n{snippet}" for i, snippet in enumerate(
-        snippets)]) if snippets else '[Keine passenden Dokumentationsauszüge gefunden]'
+        snippets)]) if snippets else '[No relevant documentation excerpts found]'
 
     human = HumanMessage(content=f"""
 User question: {question}
@@ -1484,6 +1485,7 @@ Available documentation excerpts:
 
 Answer the question based on the available information.
 IMPORTANT: Use the documentation excerpts as the primary source and use the correct API structure from the documentation.
+IMPORTANT: Don't say something like: "I could not find anything in the excerpts". If the excerpts are empty or do not contain relevant information, just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.
 """)
 
     resp = llm.invoke([sys, human])
@@ -1503,4 +1505,4 @@ def route_from_qa_mode(state: ApiMappingState, config: RunnableConfig) -> str:
     decision = state.get("decision")
     if decision == "continue":
         return state.get("next_node_after_qa")
-    return NodeNames.QA_MODE                                                                
+    return NodeNames.QA_MODE
