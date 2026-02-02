@@ -20,15 +20,15 @@ def chat_node(state: ErrorDetectionState) -> Dict[str, Any]:
     if not messages:
         return {
             "messages": [
-            AIMessage(content=(
-                "# 🔍 API Error Help\n\n"
-                "Hello! I help with problems related to the AEB TCM Screening API.\n\n"
-                "You can simply describe what happened - for example:\n"
-                "• \"I'm getting a 400 error\"\n"
-                "• \"My request isn't working\"\n"
-                "• \"What does this error code mean?\"\n\n"
-                "What's the problem?"
-            ))
+                AIMessage(content=(
+                    """
+                Hello! I help with problems related to the AEB TCM Screening API.
+                
+                You can simply describe what happened - for example:
+                - \"I'm getting a 400 error\"
+                - \"What does this error code mean?\"
+                """
+                ))
             ]
         }
 

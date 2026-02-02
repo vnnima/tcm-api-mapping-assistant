@@ -134,6 +134,47 @@ Example Response:
 }
 ```
 
+### Embedding the AEB GUI into your software - Open the match handling overview for all open matches
+
+
+The API matchHandlingView can be used to open the match handling overview, which displays all open matches from the latest Compliance Screening checks. Integrating this API is useful if the response from the screenAddresses API is evaluated in the partner system and a user is to be offered a central tile or function that allows them to access the match handling. This allows a compliance officer to jump directly to match handling without a parallel browser login to Trade Compliance Management.  
+
+The API request supports transmitting a stored view in the field storedViewName of the specificParms. Individual views can be configured in the match handling UI before the API is used (e.g., if a separate query is to be made for the address matches or good guy alert event, or if a specific partner system or specific compliance profile and/or organizational unit are is be retrieved). The parameter for the filter name to be transferred corresponds to the abbreviation of the view. If no individual filter is passed in the specificParms, then a default view is used.
+
+The documentation of that can be found here: https://trade-compliance.docs.developers.aeb.com/reference/matchhandlingview
+
+Example Request:
+```
+curl --request POST \
+     --url https://rz3.aeb.de/test4ce/rest/ComplianceScreeningApplications/matchHandlingView \
+     --header 'accept: application/json' \
+     --header 'content-type: application/json' \
+     --data '
+{
+  "generalParms": {
+    "client": "APITEST",
+    "user": "SNR",
+    "language": "en",
+    "isACEmbedded": false,
+    "displayTitlebar": false,
+    "displayFullWorkplace": false,
+    "displayStatusbar": false
+  },
+  "specificParms": {
+    "storedViewName": "OPEN_MATCHES"
+  }
+}
+```
+
+Example Response:
+```
+{
+   "sessionid": "AFCall-Invoke565511061768235996285",
+   "httpUrl": "https://rz3.aeb.de/test4ce/servlet/LazyStartAF?call=Invoke565511061768235996285",
+   "urlCloseToken": "goodbypage"
+}
+```
+
 
 ### Count the number of open matches 
 
