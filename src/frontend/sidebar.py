@@ -3,8 +3,14 @@ from api import get_thread_state, create_thread, delete_thread
 
 
 def render_sidebar():
-    assistant = st.selectbox("Select Assistant", sorted(list(
-        st.session_state.assistants.keys())))
+    keys = list(st.session_state.assistants.keys())
+    # API mapping should be first
+    if "API mapping" in keys:
+        keys.remove("API mapping")
+        options = ["API mapping"] + sorted(keys)
+    else:
+        options = sorted(keys)
+    assistant = st.selectbox("Select Mode", options)
 
     previous_assistant = st.session_state.get("active_assistant")
     assistant_changed = previous_assistant is not None and previous_assistant != assistant
