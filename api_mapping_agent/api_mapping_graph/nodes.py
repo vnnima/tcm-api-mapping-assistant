@@ -74,7 +74,7 @@ def intro_node(state: ApiMappingState) -> dict:
                 "You are an AEB Trade Compliance API expert. "
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts."
-                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
             ))
 
             human = HumanMessage(
@@ -137,7 +137,7 @@ def ask_endpoints_node(state: ApiMappingState) -> dict:
                 "You are an AEB Trade Compliance API expert. "
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts."
-                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
             ))
 
             human = HumanMessage(
@@ -231,7 +231,7 @@ def ask_client_node(state: ApiMappingState) -> dict:
                 "You are an AEB Trade Compliance API expert. "
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts."
-                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
             ))
 
             human = HumanMessage(
@@ -428,7 +428,7 @@ def ask_general_info_node(state: ApiMappingState) -> dict:
                 "You are an AEB Trade Compliance API expert. "
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts and configuration data. "
-                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
                 "If documentation is available, base your answer on it and not on general knowledge."
             ))
 
@@ -561,6 +561,7 @@ def ask_screening_variants_node(state: ApiMappingState) -> dict:
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts and configuration data. "
                 "If documentation is available, base your answer on it and not on general knowledge."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
             ))
 
             human = HumanMessage(content=f"""
@@ -712,6 +713,7 @@ def ask_responses_node(state: ApiMappingState) -> dict:
                 "Answer questions about the TCM Screening API precisely and helpfully in English. "
                 "ALWAYS use the available documentation excerpts and configuration data. "
                 "If documentation is available, base your answer on it and not on general knowledge."
+                "If the documentation excerpts are empty or do not contain relevant information, don't mention that you could not find relevant information there. Just say that you don't have enough information to answer the question. Suggest to look into the official AEB Trade Compliance Management documentation for more details.Don't mention any documents or snippets in your answer, like 'I found this information in document 1' or similar. Just answer the question based on the documentation excerpts without mentioning them explicitly."
             ))
 
             human = HumanMessage(content=f"""
@@ -964,12 +966,6 @@ You are an expert AI assistant specialized in helping customers map their intern
 
 ## Core Capabilities
 
-## About Good Guys
-
-**Good Guy**: If the Compliance Screening check has returned a match, i.e., the checked business partner is similar to a restricted Party list entry according to the selected threshold value, then follow-up processing of a match is required. As a result of false positives (there is no identity between your checked business partner and the entry on the restricted party list), a good guy can be defined (with or without conditions). A good guy without condition will always apply to all subsequent checks of the same business partner address for which it was defined (with consideration of the address check relevant fields). A good guy with condtion is just valid for a single process or to release the business partner address once. The process or context for which the good guy is valid is derived from the condition of the address check (REST API screenAddresses, SOAP API batchMatch). A Good Guy with condition “ORDER_12560” will only apply for the business partner address for this order number 12560. The same business partner address for a different condition will be critical again. A good guy without condition will always apply to all future or subsequent checks of the same business partner address for which it was defined, taking into consideration the relevant address check fields. A good guy with a condition is only valid for a single process or to release the business partner address once. The process or context for which the good guy is valid is derived from the condition of the business partner address during the Compliance Screening check (REST API screenAddresses, SOAP API batchMatch). A Good Guy with condition “ORDER_12560” will only apply for the business partner address for this order number 12560.  A different condition for the same business partner address will result in a critical check result again. Good guys are stored in Trade Compliance Management so that no new matches are reported during a follow-up check with the same business partner (identical name and address). With the parameter considerGoodGuys you can control whether good guys are used or not. If this parameter is set to the value "false", the Good Guys will be ignored. If it is omitted or set to "true", good guys will be considered. This parameter is optional and is usually not needed, as good guys should already be in place to avoid duplication of effort.
-The condition offers the possibility of releasing the business address once (e.g. just for one sales order), thereby eliminating the need to create a general good guy that would affect the outcome of subsequent checks.
-
-
 ### 1. Data Schema Analysis
 - Analyze customer's internal data structures (JSON, XML, CSV, database schemas, etc.)
 - Identify relevant fields in customers data to mapp them to the APIs for Compliance Screening
@@ -1017,6 +1013,7 @@ Create comprehensive mappings that include:
 - Consider `condition` for context-specific good guys. The field `condition` with `description` and `value` must be included in each Field Mapping Table.
 - The context for conditions of master data records (e.g. customer, vendor, employee, banks) is usually a combination of business object type and reference number that can be used as a condition (e.g `value` = customer_number,`description` = customer: number).
 - The usecase for conditions of transactional movement data (e.g. sales orders, deliveries, purchase oders, shipmemts) is the continuous applicability of a good guy for business objects that are related in a document flow (eg Quotation → Order → Delivery) so that the conditional exemption also applies to subsequent documents. It is common practice to derive the condition from the first document in the flow (e.g quotation oder sales order). Therefore, the field filling of the condition for transactional movement data should be a combination of business object type and reference number (e.g `value` = salesorder_number, `description` = sales order: number).
+- If an address check results in a match but should be released just once (e.g. just this specific order, delivery or master data record), and without affecting future check results, the correct approach is to pass a condition in the API call, so that a user has the option to create a good guy with condition during match handling.
 
 ## Response Format
 
